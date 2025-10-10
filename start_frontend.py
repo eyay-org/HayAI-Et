@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import subprocess
+import sys
 
 print("🚀 Starting Frontend...")
 
@@ -11,4 +12,9 @@ if not os.path.exists("frontend/node_modules"):
 
 # Start server
 os.chdir("frontend")
-subprocess.run(["npm", "start"])
+
+# Use shell=True for Windows compatibility
+if sys.platform == "win32":
+    subprocess.run("npm start", shell=True)
+else:
+    subprocess.run(["npm", "start"])

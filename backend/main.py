@@ -1,7 +1,9 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 import aiofiles
 from pathlib import Path
+import uuid
+from services.image_transformer import transform_image
 
 app = FastAPI(title="HayAI Art Platform", version="1.0.0")
 
@@ -42,8 +44,6 @@ async def upload_file(file: UploadFile = File(...)):
 
         # Create unique filename
         file_extension = file.filename.split(".")[-1] if "." in file.filename else "jpg"
-        import uuid
-
         unique_filename = f"{uuid.uuid4()}.{file_extension}"
         file_path = UPLOAD_DIR / unique_filename
 
@@ -51,13 +51,24 @@ async def upload_file(file: UploadFile = File(...)):
         async with aiofiles.open(file_path, "wb") as out_file:
             await out_file.write(content)
 
+        # Transform image
+        improved_content = transform_image(content)
+
+        # Save improved image
+        improved_filename = f"improved_{unique_filename}"
+        improved_file_path = UPLOAD_DIR / improved_filename
+        async with aiofiles.open(improved_file_path, "wb") as out_file:
+            await out_file.write(improved_content)
+
         return {
-            "message": "File uploaded successfully",
+            "message": "File uploaded and improved successfully",
             "filename": unique_filename,
+            "improved_filename": improved_filename,
             "original_filename": file.filename,
             "content_type": file.content_type,
             "size": len(content),
             "file_path": str(file_path),
+            "improved_file_path": str(improved_file_path),
         }
 
     except HTTPException:
