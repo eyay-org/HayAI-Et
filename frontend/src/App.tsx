@@ -1,0 +1,185 @@
+import React, { useState, useRef } from "react";
+import axios from "axios";
+import "./App.css";
+
+interface UploadResponse {
+  message: string;
+  filename: string;
+  original_filename: string;
+  content_type: string;
+  size: number;
+  file_path: string;
+}
+
+function App() {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string>("");
+  const [uploading, setUploading] = useState(false);
+  const [message, setMessage] = useState<{
+    type: "success" | "error" | "info";
+    text: string;
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = (file: File) => {
+    if (file && file.type.startsWith("image/")) {
+      setSelectedFile(file);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+
+      setMessage(null);
+    } else {
+      setMessage({ type: "error", text: "Lütfen bir resim dosyası seçin!" });
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileSelect(file);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      handleFileSelect(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      setMessage({ type: "error", text: "Lütfen önce bir dosya seçin!" });
+      return;
+    }
+
+    setUploading(true);
+    setMessage({ type: "info", text: "Resminiz yükleniyor..." });
+
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+
+    try {
+      const response = await axios.post<UploadResponse>(
+        "http://localhost:8000/upload/",
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+
+      setMessage({
+        type: "success",
+        text: `✅ Başarılı! "${response.data.original_filename}" dosyası yüklendi ve işleniyor.`,
+      });
+
+      // Reset form
+      setSelectedFile(null);
+      setPreview("");
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    } catch (error: any) {
+      setMessage({
+        type: "error",
+        text: `❌ Hata: ${error.response?.data?.detail || error.message}`,
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const clearFile = () => {
+    setSelectedFile(null);
+    setPreview("");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    setMessage(null);
+  };
+
+  return (
+    <div className="App">
+      <div className="container">
+        <header className="header">
+          <h1>🎨 HayAI Art Platform</h1>
+          <p>Çiziminizi yükleyin ve AI ile dönüştürün!</p>
+        </header>
+
+        <main className="main">
+          <div className="upload-section">
+            <div
+              className="upload-area"
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                style={{ display: "none" }}
+              />
+
+              {!preview ? (
+                <div className="upload-content">
+                  <div className="upload-icon">📁</div>
+                  <h3>Çiziminizi Seçin</h3>
+                  <p>Tıklayın veya sürükleyip bırakın</p>
+                  <button className="select-button">Dosya Seç</button>
+                </div>
+              ) : (
+                <div className="preview-content">
+                  <img src={preview} alt="Preview" className="preview-image" />
+                  <div className="file-info">
+                    <p>
+                      <strong>Dosya:</strong> {selectedFile?.name}
+                    </p>
+                    <p>
+                      <strong>Boyut:</strong>{" "}
+                      {(selectedFile?.size! / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                  </div>
+                  <button className="clear-button" onClick={clearFile}>
+                    ✕ Temizle
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {message && (
+              <div className={`message ${message.type}`}>{message.text}</div>
+            )}
+
+            <button
+              className="upload-button"
+              onClick={handleUpload}
+              disabled={!selectedFile || uploading}
+            >
+              {uploading ? "⏳ Yükleniyor..." : "🚀 Yükle ve Dönüştür"}
+            </button>
+          </div>
+        </main>
+
+        <footer className="footer">
+          <p>HayAI Art Platform - Çocuklar için AI destekli sanat platformu</p>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+export default App;
