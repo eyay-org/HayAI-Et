@@ -1,5 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import aiofiles
 from pathlib import Path
 import uuid
@@ -44,13 +45,18 @@ async def upload_file(file: UploadFile = File(...)):
         # Transform image
         improved_file_path = transform_image(str(file_path))
 
+        # Extract filename from path (works for both Windows and Unix paths)
+        improved_filename = Path(improved_file_path).name
+
         return {
             "message": "File uploaded and transformed successfully",
             "filename": unique_filename,
-            "improved_filename": improved_file_path.split("/")[-1],
+            "improved_filename": improved_filename,
             "original_filename": file.filename,
             "file_path": str(file_path),
             "improved_file_path": improved_file_path,
+            "original_url": f"/uploads/{unique_filename}",
+            "improved_url": f"/uploads/{improved_filename}",
         }
 
     except Exception as e:
@@ -63,7 +69,11 @@ async def health_check():
     return {"status": "healthy", "message": "HayAI Art Platform is running!"}
 
 
+# Mount static files directory AFTER all endpoints are defined
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -5,16 +5,21 @@ import "./App.css";
 interface UploadResponse {
   message: string;
   filename: string;
+  improved_filename: string;
   original_filename: string;
-  content_type: string;
-  size: number;
-  file_path: string;
+  original_url: string;
+  improved_url: string;
 }
 
 function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string>("");
   const [uploading, setUploading] = useState(false);
+  const [uploadedImages, setUploadedImages] = useState<{
+    original: string;
+    improved: string;
+    filename: string;
+  } | null>(null);
   const [message, setMessage] = useState<{
     type: "success" | "error" | "info";
     text: string;
@@ -82,7 +87,14 @@ function App() {
 
       setMessage({
         type: "success",
-        text: `✅ Başarılı! "${response.data.original_filename}" dosyası yüklendi ve işleniyor.`,
+        text: `✅ Başarılı! "${response.data.original_filename}" dosyası yüklendi ve dönüştürüldü.`,
+      });
+
+      // Set uploaded images for display
+      setUploadedImages({
+        original: `http://localhost:8000${response.data.original_url}`,
+        improved: `http://localhost:8000${response.data.improved_url}`,
+        filename: response.data.original_filename,
       });
 
       // Reset form
@@ -107,6 +119,11 @@ function App() {
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+    setMessage(null);
+  };
+
+  const clearResults = () => {
+    setUploadedImages(null);
     setMessage(null);
   };
 
@@ -172,6 +189,37 @@ function App() {
               {uploading ? "⏳ Yükleniyor..." : "🚀 Yükle ve Dönüştür"}
             </button>
           </div>
+
+          {/* Results Section */}
+          {uploadedImages && (
+            <div className="results-section">
+              <h2>🎨 Sonuçlar</h2>
+              <div className="image-comparison">
+                <div className="image-container">
+                  <h3>Orijinal Çizim</h3>
+                  <img
+                    src={uploadedImages.original}
+                    alt="Orijinal çizim"
+                    className="result-image"
+                  />
+                </div>
+                <div className="vs-divider">
+                  <span>VS</span>
+                </div>
+                <div className="image-container">
+                  <h3>AI ile Geliştirilmiş</h3>
+                  <img
+                    src={uploadedImages.improved}
+                    alt="Geliştirilmiş çizim"
+                    className="result-image"
+                  />
+                </div>
+              </div>
+              <button className="clear-results-button" onClick={clearResults}>
+                ✕ Sonuçları Temizle
+              </button>
+            </div>
+          )}
         </main>
 
         <footer className="footer">
