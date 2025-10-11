@@ -7,7 +7,6 @@ from services.image_transformer import transform_image
 
 app = FastAPI(title="HayAI Art Platform", version="1.0.0")
 
-# Enable CORS for frontend communication
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # In production, specify your frontend URL
@@ -16,7 +15,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create uploads directory if it doesn't exist
+# Create uploads directory
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
@@ -29,50 +28,31 @@ async def root():
 
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):
-    """Handle image file uploads"""
+    """Handle image file uploads and transform them using AI"""
     try:
-        # Validate file type
-        if not file.content_type.startswith("image/"):
-            raise HTTPException(status_code=400, detail="File must be an image")
-
-        # Validate file size (max 10MB)
+        # Read file content
         content = await file.read()
-        if len(content) > 10 * 1024 * 1024:  # 10MB
-            raise HTTPException(
-                status_code=400, detail="File size must be less than 10MB"
-            )
 
         # Create unique filename
-        file_extension = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+        file_extension = file.filename.split(".")[-1].lower()
         unique_filename = f"{uuid.uuid4()}.{file_extension}"
         file_path = UPLOAD_DIR / unique_filename
 
-        # Save file
         async with aiofiles.open(file_path, "wb") as out_file:
             await out_file.write(content)
 
         # Transform image
-        improved_content = transform_image(content)
-
-        # Save improved image
-        improved_filename = f"improved_{unique_filename}"
-        improved_file_path = UPLOAD_DIR / improved_filename
-        async with aiofiles.open(improved_file_path, "wb") as out_file:
-            await out_file.write(improved_content)
+        improved_file_path = transform_image(str(file_path))
 
         return {
-            "message": "File uploaded and improved successfully",
+            "message": "File uploaded and transformed successfully",
             "filename": unique_filename,
-            "improved_filename": improved_filename,
+            "improved_filename": improved_file_path.split("/")[-1],
             "original_filename": file.filename,
-            "content_type": file.content_type,
-            "size": len(content),
             "file_path": str(file_path),
-            "improved_file_path": str(improved_file_path),
+            "improved_file_path": improved_file_path,
         }
 
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
@@ -86,4 +66,4 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)

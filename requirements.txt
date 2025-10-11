@@ -4,3 +4,4 @@ aiofiles==25.1.0
 python-multipart==0.0.20
 openai==2.3.0
 python-dotenv==1.1.1
+pillow==11.3.0
