@@ -18,6 +18,8 @@ interface GalleryItem {
   filename: string;
   originalFilename: string; // Store the backend filename for deletion
   timestamp: number;
+  title?: string; // Custom title for the image
+  emoji?: string; // Custom emoji for the image
 }
 
 function App() {
@@ -34,12 +36,18 @@ function App() {
     text: string;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [magnifiedImage, setMagnifiedImage] = useState<{
-    src: string;
-    alt: string;
+  const [magnifiedImages, setMagnifiedImages] = useState<{
+    original: string;
+    improved: string;
+    filename: string;
+    title?: string;
+    emoji?: string;
   } | null>(null);
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
   const [currentView, setCurrentView] = useState<'upload' | 'gallery'>('upload');
+  const [editingItem, setEditingItem] = useState<GalleryItem | null>(null);
+  const [editTitle, setEditTitle] = useState<string>('');
+  const [editEmoji, setEditEmoji] = useState<string>('');
 
   // Load gallery from localStorage on component mount
   React.useEffect(() => {
@@ -177,12 +185,12 @@ function App() {
     setMessage(null);
   };
 
-  const openMagnifiedView = (src: string, alt: string) => {
-    setMagnifiedImage({ src, alt });
+  const openMagnifiedView = (original: string, improved: string, filename: string, title?: string, emoji?: string) => {
+    setMagnifiedImages({ original, improved, filename, title, emoji });
   };
 
   const closeMagnifiedView = () => {
-    setMagnifiedImage(null);
+    setMagnifiedImages(null);
   };
 
   const removeFromGallery = async (id: string) => {
@@ -247,6 +255,87 @@ function App() {
       });
     }
   };
+
+  const openEditModal = (item: GalleryItem) => {
+    setEditingItem(item);
+    setEditTitle(item.title || '');
+    setEditEmoji(item.emoji || '🎨');
+  };
+
+  const closeEditModal = () => {
+    setEditingItem(null);
+    setEditTitle('');
+    setEditEmoji('');
+  };
+
+  const saveEdit = () => {
+    if (!editingItem) return;
+
+    setGallery(prev => prev.map(item => 
+      item.id === editingItem.id 
+        ? { ...item, title: editTitle.trim(), emoji: editEmoji }
+        : item
+    ));
+
+    closeEditModal();
+    setMessage({
+      type: "success",
+      text: `✅ "${editingItem.filename}" güncellendi!`,
+    });
+  };
+
+  // Available emojis for selection - organized by popularity for children
+  const availableEmojis = [
+    // Most Popular - Animals (kids love animals!)
+    '🐱', '🐶', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐸',
+    '🐵', '🐮', '🐷', '🐙', '🦑', '🐠', '🐟', '🐬', '🐳', '🦋',
+    '🐛', '🐝', '🐞', '🦗', '🐢', '🐍', '🦎', '🦜', '🐦', '🐤',
+    '🐥', '🐣', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🦌', '🐴',
+    
+    // Very Popular - Art & Creative (perfect for drawings!)
+    '🎨', '🖼️', '✏️', '🖍️', '🖌️', '🎭', '🎪', '🖋️', '📝', '🌟',
+    '💫', '🌈', '🦄', '✨', '🎆', '🎇', '💎', '🔮', '🎊', '🎉',
+    '🎈', '🎁', '🎀', '🎂', '🍰', '🧁', '🍭', '🍬', '🍫', '🍪',
+    
+    // Very Popular - Nature & Weather
+    '☀️', '🌙', '⭐', '🌠', '⛅', '🌈', '❄️', '💧', '🌊', '☁️',
+    '🏠', '🌳', '🌺', '🌸', '🌻', '🌷', '🌹', '🌵', '🌲', '🌴',
+    '🌱', '🌿', '🍀', '🌾', '🍄', '🌍', '🌎', '🌏', '🌕', '🌖',
+    
+    // Popular - Hearts & Colors (child-friendly)
+    '❤️', '💙', '💚', '💛', '🧡', '💜', '🖤', '🤍', '💖', '💝',
+    '💕', '💞', '💓', '💗', '💘', '💟', '❣️', '🌺', '🌸', '🌼',
+    
+    // Popular - Food & Treats
+    '🍎', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🍈', '🍒', '🍑',
+    '🍍', '🥝', '🍅', '🥕', '🌽', '🍞', '🧀', '🍕', '🌮', '🍔',
+    '🍟', '🌭', '🥪', '🍗', '🍖', '🥓', '🍳', '🥞', '🧇', '🍯',
+    
+    // Fun - Sports & Activities
+    '⚽', '🏀', '🏈', '⚾', '🎾', '🏐', '🏉', '🎱', '🏓', '🏸',
+    '🏒', '🏑', '🎯', '🏹', '🎣', '🏊', '🏄', '🏇', '🚴', '🏃',
+    '🤸', '🤾', '🏋️', '🤽', '🥇', '🥈', '🥉', '🏅', '🏆', '🎖️',
+    
+    // Fun - Music & Entertainment (no gambling)
+    '🎵', '🎶', '🎤', '🎧', '🎸', '🎹', '🥁', '🎺', '🎷', '🎻',
+    '🎬', '🎭', '🎪', '🎯', '🎲', '🃏', '🎴', '🀄', '🧸', '🎮',
+    '🕹️', '📚', '📖', '📝', '✏️', '🖍️', '🖊️', '📐', '📏', '📌',
+    
+    // Fun - Transportation & Objects
+    '🚗', '🚕', '🚙', '🚌', '🚎', '🏎️', '🚓', '🚑', '🚒', '🚐',
+    '🛻', '🚚', '🚛', '🚜', '🏍️', '🛵', '🚲', '🛴', '🛹', '🛼',
+    '✈️', '🛩️', '🛫', '🛬', '🪂', '💺', '🚀', '🛸', '🚁', '🛶',
+    
+    // Fun - Fantasy & Magic (friendly characters only)
+    '🧚', '🧜', '🧞', '🧝', '🧙', '👸', '🤴', '🦸', '🦹', '🧙‍♀️',
+    '🧙‍♂️', '🧚‍♀️', '🧚‍♂️', '🧜‍♀️', '🧜‍♂️', '🧞‍♀️', '🧞‍♂️', '🧝‍♀️', '🧝‍♂️', '🦸‍♀️',
+    '🦸‍♂️', '🦹‍♀️', '🦹‍♂️', '👼', '🎅', '🤶', '🧑‍🎄', '🎄', '⛄', '🎃',
+    
+    // Fun - Toys & Games (no gambling)
+    '🧸', '🎯', '🎲', '🃏', '🎴', '🀄', '🪀', '🎮', '🕹️', '🪁',
+    '🎏', '🎐', '🧩', '🪆', '🎎', '🎑', '🎍', '🎋', '🎊', '🎉',
+    '🎈', '🎁', '🎀', '🎂', '🍰', '🧁', '🍭', '🍬', '🍫', '🍪'
+  ];
 
   return (
     <div className="App">
@@ -334,7 +423,7 @@ function App() {
                   <div className="image-comparison">
                     <div className="image-container">
                       <h3>Orijinal Çizim</h3>
-                      <div className="image-wrapper" onClick={() => openMagnifiedView(uploadedImages.original, "Orijinal çizim")}>
+                      <div className="image-wrapper" onClick={() => openMagnifiedView(uploadedImages.original, uploadedImages.improved, uploadedImages.filename)}>
                         <img
                           src={uploadedImages.original}
                           alt="Orijinal çizim"
@@ -350,7 +439,7 @@ function App() {
                     </div>
                     <div className="image-container">
                       <h3>AI ile Geliştirilmiş</h3>
-                      <div className="image-wrapper" onClick={() => openMagnifiedView(uploadedImages.improved, "AI ile Geliştirilmiş çizim")}>
+                      <div className="image-wrapper" onClick={() => openMagnifiedView(uploadedImages.original, uploadedImages.improved, uploadedImages.filename)}>
                         <img
                           src={uploadedImages.improved}
                           alt="Geliştirilmiş çizim"
@@ -393,30 +482,42 @@ function App() {
                 <div className="photo-gallery">
                   {gallery.map((item) => (
                     <div key={item.id} className="photo-item">
-                      <div className="photo-comparison">
-                        <div className="photo-original" onClick={() => openMagnifiedView(item.original, `Orijinal: ${item.filename}`)}>
-                          <img src={item.original} alt="Orijinal" className="photo-image" />
-                          <div className="photo-overlay">
-                            <span className="photo-label">Orijinal</span>
-                            <span className="magnify-icon">🔍</span>
-                          </div>
+                      <div className="photo-header">
+                        <div className="photo-title">
+                          <span className="photo-emoji">{item.emoji || '🎨'}</span>
+                          <span className="photo-title-text">
+                            {item.title || item.filename}
+                          </span>
                         </div>
-                        <div className="photo-improved" onClick={() => openMagnifiedView(item.improved, `AI Geliştirilmiş: ${item.filename}`)}>
-                          <img src={item.improved} alt="AI Geliştirilmiş" className="photo-image" />
-                          <div className="photo-overlay">
-                            <span className="photo-label">AI Geliştirilmiş</span>
-                            <span className="magnify-icon">🔍</span>
-                          </div>
+                        <div className="photo-actions">
+                          <button 
+                            className="edit-photo-button"
+                            onClick={() => openEditModal(item)}
+                            title="Başlık ve emoji düzenle"
+                          >
+                            ✏️
+                          </button>
+                          <button 
+                            className="remove-photo-button"
+                            onClick={() => removeFromGallery(item.id)}
+                            title="Galeriden kaldır"
+                          >
+                            🗑️
+                          </button>
                         </div>
                       </div>
-                      <div className="photo-actions">
-                        <button 
-                          className="remove-photo-button"
-                          onClick={() => removeFromGallery(item.id)}
-                          title="Galeriden kaldır"
-                        >
-                          🗑️
-                        </button>
+                      <div className="photo-comparison" onClick={() => openMagnifiedView(item.original, item.improved, item.filename, item.title, item.emoji)}>
+                        <div className="photo-original">
+                          <img src={item.original} alt="Orijinal" className="photo-image" />
+                          <span className="photo-label">Orijinal</span>
+                        </div>
+                        <div className="photo-improved">
+                          <img src={item.improved} alt="AI Geliştirilmiş" className="photo-image" />
+                          <span className="photo-label">AI Geliştirilmiş</span>
+                        </div>
+                        <div className="photo-overlay">
+                          <span className="magnify-icon">🔍</span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -426,19 +527,84 @@ function App() {
           )}
         </main>
 
-        {/* Magnified Image Modal */}
-        {magnifiedImage && (
+        {/* Magnified Images Modal */}
+        {magnifiedImages && (
           <div className="modal-overlay" onClick={closeMagnifiedView}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
               <button className="modal-close" onClick={closeMagnifiedView}>
                 ✕
               </button>
-              <img
-                src={magnifiedImage.src}
-                alt={magnifiedImage.alt}
-                className="magnified-image"
-              />
-              <p className="modal-caption">{magnifiedImage.alt}</p>
+              <div className="modal-comparison">
+                <div className="modal-original">
+                  <img
+                    src={magnifiedImages.original}
+                    alt="Orijinal"
+                    className="magnified-image"
+                  />
+                  <p className="modal-caption">Orijinal Çizim</p>
+                </div>
+                <div className="modal-improved">
+                  <img
+                    src={magnifiedImages.improved}
+                    alt="AI Geliştirilmiş"
+                    className="magnified-image"
+                  />
+                  <p className="modal-caption">AI ile Geliştirilmiş</p>
+                </div>
+              </div>
+              <div className="modal-title">
+                <span className="modal-emoji">{magnifiedImages.emoji || '🎨'}</span>
+                <span className="modal-title-text">
+                  {magnifiedImages.title || magnifiedImages.filename}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Modal */}
+        {editingItem && (
+          <div className="modal-overlay" onClick={closeEditModal}>
+            <div className="edit-modal-content" onClick={(e) => e.stopPropagation()}>
+              <button className="modal-close" onClick={closeEditModal}>
+                ✕
+              </button>
+              <h3>Çizimi Düzenle</h3>
+              <div className="edit-form">
+                <div className="edit-field">
+                  <label>Başlık:</label>
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    placeholder="Çiziminiz için bir başlık yazın..."
+                    maxLength={30}
+                    className="edit-input"
+                  />
+                </div>
+                <div className="edit-field">
+                  <label>Emoji Seçin:</label>
+                  <div className="emoji-picker">
+                    {availableEmojis.map((emoji) => (
+                      <button
+                        key={emoji}
+                        className={`emoji-option ${editEmoji === emoji ? 'selected' : ''}`}
+                        onClick={() => setEditEmoji(emoji)}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="edit-actions">
+                  <button className="cancel-button" onClick={closeEditModal}>
+                    İptal
+                  </button>
+                  <button className="save-button" onClick={saveEdit}>
+                    Kaydet
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
