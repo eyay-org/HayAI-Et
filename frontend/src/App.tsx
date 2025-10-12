@@ -16,6 +16,7 @@ interface GalleryItem {
   original: string;
   improved: string;
   filename: string;
+  originalFilename: string; // Store the backend filename for deletion
   timestamp: number;
 }
 
@@ -45,7 +46,13 @@ function App() {
     const savedGallery = localStorage.getItem('hayai-gallery');
     if (savedGallery) {
       try {
-        setGallery(JSON.parse(savedGallery));
+        const parsedGallery = JSON.parse(savedGallery);
+        // Migrate old gallery items that don't have originalFilename
+        const migratedGallery = parsedGallery.map((item: any) => ({
+          ...item,
+          originalFilename: item.originalFilename || null, // Add null for old items
+        }));
+        setGallery(migratedGallery);
       } catch (error) {
         console.error('Error loading gallery from localStorage:', error);
       }
@@ -135,6 +142,7 @@ function App() {
         original: newImages.original,
         improved: newImages.improved,
         filename: newImages.filename,
+        originalFilename: response.data.filename, // Store backend filename for deletion
         timestamp: Date.now(),
       };
       setGallery(prev => [newGalleryItem, ...prev]);
@@ -177,12 +185,67 @@ function App() {
     setMagnifiedImage(null);
   };
 
-  const removeFromGallery = (id: string) => {
-    setGallery(prev => prev.filter(item => item.id !== id));
+  const removeFromGallery = async (id: string) => {
+    const item = gallery.find(item => item.id === id);
+    if (!item) return;
+
+    try {
+      // Only call backend if we have the originalFilename
+      if (item.originalFilename) {
+        await axios.delete(`http://localhost:8000/delete/${item.originalFilename}`);
+      }
+      
+      // Remove from gallery (always remove from frontend)
+      setGallery(prev => prev.filter(item => item.id !== id));
+      
+      setMessage({
+        type: "success",
+        text: `✅ "${item.filename}" galeriden silindi.${item.originalFilename ? ' Sunucudan da silindi.' : ''}`,
+      });
+    } catch (error: any) {
+      console.error('Delete error:', error);
+      // Still remove from gallery even if backend deletion fails
+      setGallery(prev => prev.filter(item => item.id !== id));
+      setMessage({
+        type: "error",
+        text: `❌ Sunucudan silinemedi, ancak galeriden kaldırıldı: ${error.response?.data?.detail || error.message}`,
+      });
+    }
   };
 
-  const clearGallery = () => {
-    setGallery([]);
+  const clearGallery = async () => {
+    if (gallery.length === 0) return;
+
+    try {
+      // Delete files from backend (only for items that have originalFilename)
+      const itemsWithFilename = gallery.filter(item => item.originalFilename);
+      const deletePromises = itemsWithFilename.map(item => 
+        axios.delete(`http://localhost:8000/delete/${item.originalFilename}`)
+      );
+      
+      if (deletePromises.length > 0) {
+        await Promise.all(deletePromises);
+      }
+      
+      // Clear gallery (always clear frontend)
+      setGallery([]);
+      
+      const deletedCount = itemsWithFilename.length;
+      const totalCount = gallery.length;
+      
+      setMessage({
+        type: "success",
+        text: `✅ Tüm çizimler galeriden silindi.${deletedCount > 0 ? ` ${deletedCount}/${totalCount} sunucudan da silindi.` : ''}`,
+      });
+    } catch (error: any) {
+      console.error('Clear gallery error:', error);
+      // Still clear gallery even if some backend deletions fail
+      setGallery([]);
+      setMessage({
+        type: "error",
+        text: `❌ Bazı dosyalar sunucudan silinemedi, ancak galeri temizlendi: ${error.response?.data?.detail || error.message}`,
+      });
+    }
   };
 
   return (
@@ -327,47 +390,33 @@ function App() {
                   </button>
                 </div>
               ) : (
-                <div className="gallery-grid">
+                <div className="photo-gallery">
                   {gallery.map((item) => (
-                    <div key={item.id} className="gallery-item">
-                      <div className="gallery-item-header">
-                        <h4>{item.filename}</h4>
+                    <div key={item.id} className="photo-item">
+                      <div className="photo-comparison">
+                        <div className="photo-original" onClick={() => openMagnifiedView(item.original, `Orijinal: ${item.filename}`)}>
+                          <img src={item.original} alt="Orijinal" className="photo-image" />
+                          <div className="photo-overlay">
+                            <span className="photo-label">Orijinal</span>
+                            <span className="magnify-icon">🔍</span>
+                          </div>
+                        </div>
+                        <div className="photo-improved" onClick={() => openMagnifiedView(item.improved, `AI Geliştirilmiş: ${item.filename}`)}>
+                          <img src={item.improved} alt="AI Geliştirilmiş" className="photo-image" />
+                          <div className="photo-overlay">
+                            <span className="photo-label">AI Geliştirilmiş</span>
+                            <span className="magnify-icon">🔍</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="photo-actions">
                         <button 
-                          className="remove-item-button"
+                          className="remove-photo-button"
                           onClick={() => removeFromGallery(item.id)}
                           title="Galeriden kaldır"
                         >
-                          ✕
+                          🗑️
                         </button>
-                      </div>
-                      <div className="gallery-comparison">
-                        <div className="gallery-original">
-                          <span className="gallery-label">Orijinal</span>
-                          <div className="gallery-image-wrapper" onClick={() => openMagnifiedView(item.original, `Orijinal: ${item.filename}`)}>
-                            <img src={item.original} alt="Orijinal" className="gallery-image" />
-                            <div className="magnify-overlay">
-                              <span className="magnify-icon">🔍</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="gallery-improved">
-                          <span className="gallery-label">AI Geliştirilmiş</span>
-                          <div className="gallery-image-wrapper" onClick={() => openMagnifiedView(item.improved, `AI Geliştirilmiş: ${item.filename}`)}>
-                            <img src={item.improved} alt="AI Geliştirilmiş" className="gallery-image" />
-                            <div className="magnify-overlay">
-                              <span className="magnify-icon">🔍</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="gallery-timestamp">
-                        {new Date(item.timestamp).toLocaleDateString('tr-TR', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
                       </div>
                     </div>
                   ))}

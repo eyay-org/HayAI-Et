@@ -4,6 +4,9 @@ from fastapi.staticfiles import StaticFiles
 import aiofiles
 from pathlib import Path
 import uuid
+import os
+import time
+import gc
 from services.image_transformer import transform_image
 
 app = FastAPI(title="HayAI Art Platform", version="1.0.0")
@@ -61,6 +64,76 @@ async def upload_file(file: UploadFile = File(...)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+
+@app.delete("/delete/{filename}")
+async def delete_file(filename: str):
+    """Delete both original and improved versions of an uploaded file"""
+    try:
+        # Validate filename to prevent directory traversal attacks
+        if ".." in filename or "/" in filename or "\\" in filename:
+            raise HTTPException(status_code=400, detail="Invalid filename")
+        
+        # Construct file paths
+        original_file_path = UPLOAD_DIR / filename
+        
+        # Extract base name without extension for improved file
+        base_name = filename.rsplit('.', 1)[0] if '.' in filename else filename
+        file_extension = filename.split('.')[-1] if '.' in filename else 'jpeg'
+        improved_filename = f"{base_name}_improved.{file_extension}"
+        improved_file_path = UPLOAD_DIR / improved_filename
+        
+        deleted_files = []
+        
+        # Function to safely delete a file with retry mechanism
+        def safe_delete_file(file_path: Path, filename: str, max_retries: int = 3) -> bool:
+            for attempt in range(max_retries):
+                try:
+                    if file_path.exists():
+                        # Force garbage collection to close any file handles
+                        gc.collect()
+                        # Small delay to allow file handles to close
+                        time.sleep(0.1)
+                        file_path.unlink()
+                        return True
+                except PermissionError:
+                    if attempt < max_retries - 1:
+                        time.sleep(0.5)  # Wait longer between retries
+                        continue
+                    else:
+                        return False
+                except Exception:
+                    return False
+            return False
+        
+        # Delete original file if it exists
+        if original_file_path.exists():
+            if safe_delete_file(original_file_path, filename):
+                deleted_files.append(filename)
+            else:
+                raise HTTPException(status_code=500, detail=f"Failed to delete original file after retries: {filename}")
+        
+        # Delete improved file if it exists
+        if improved_file_path.exists():
+            if safe_delete_file(improved_file_path, improved_filename):
+                deleted_files.append(improved_filename)
+            else:
+                raise HTTPException(status_code=500, detail=f"Failed to delete improved file after retries: {improved_filename}")
+        
+        if not deleted_files:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        return {
+            "message": "Files deleted successfully",
+            "deleted_files": deleted_files,
+            "original_filename": filename,
+            "improved_filename": improved_filename
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
 
 
 @app.get("/health")
