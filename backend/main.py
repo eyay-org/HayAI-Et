@@ -1,10 +1,9 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Form
+from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import aiofiles
 from pathlib import Path
 import uuid
-import os
 import time
 import gc
 from services.image_transformer import transform_image

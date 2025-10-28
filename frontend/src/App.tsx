@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import axios from "axios";
 import "./App.css";
+import Login from "./components/Login";
 
 interface UploadResponse {
   message: string;
@@ -48,6 +49,23 @@ function App() {
   const [editingItem, setEditingItem] = useState<GalleryItem | null>(null);
   const [editTitle, setEditTitle] = useState<string>('');
   const [editEmoji, setEditEmoji] = useState<string>('');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    const storedAuth = localStorage.getItem('hayai-auth');
+    if (storedAuth) {
+      try {
+        const parsed = JSON.parse(storedAuth);
+        if (parsed?.username) {
+          setIsAuthenticated(true);
+          setCurrentUser(parsed.username);
+        }
+      } catch (error) {
+        console.error('Error loading auth state:', error);
+      }
+    }
+  }, []);
 
   // Load gallery from localStorage on component mount
   React.useEffect(() => {
@@ -71,6 +89,18 @@ function App() {
   React.useEffect(() => {
     localStorage.setItem('hayai-gallery', JSON.stringify(gallery));
   }, [gallery]);
+
+  const handleLoginSuccess = (username: string) => {
+    setIsAuthenticated(true);
+    setCurrentUser(username);
+    localStorage.setItem('hayai-auth', JSON.stringify({ username, timestamp: Date.now() }));
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    localStorage.removeItem('hayai-auth');
+  };
 
   const handleFileSelect = (file: File) => {
     if (file && file.type.startsWith("image/")) {
@@ -337,10 +367,26 @@ function App() {
     '🎈', '🎁', '🎀', '🎂', '🍰', '🧁', '🍭', '🍬', '🍫', '🍪'
   ];
 
+  if (!isAuthenticated) {
+    return (
+      <div className="App">
+        <Login onSuccess={handleLoginSuccess} />
+      </div>
+    );
+  }
+
   return (
     <div className="App">
       <div className="container">
         <header className="header">
+          {currentUser && (
+            <div className="user-session">
+              <span className="user-greeting">👋 {currentUser}</span>
+              <button className="logout-button" onClick={handleLogout}>
+                Çıkış Yap
+              </button>
+            </div>
+          )}
           <h1>🎨 HayAI Art Platform</h1>
           <p>Çiziminizi yükleyin ve AI ile dönüştürün!</p>
           <nav className="navigation">
