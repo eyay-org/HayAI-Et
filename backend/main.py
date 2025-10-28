@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import aiofiles
@@ -6,6 +6,8 @@ from pathlib import Path
 import uuid
 import time
 import gc
+from typing import List
+from pydantic import BaseModel
 from services.image_transformer import transform_image
 
 app = FastAPI(title="HayAI Art Platform", version="1.0.0")
@@ -23,10 +25,105 @@ UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 
+class UserProfile(BaseModel):
+    id: int
+    username: str
+    display_name: str
+    bio: str
+    interests: List[str] = []
+
+
+class UserSearchResponse(BaseModel):
+    query: str
+    count: int
+    results: List[UserProfile]
+
+
+# In-memory user directory for prototype purposes. Replace with database queries when ready.
+FAKE_USERS: List[UserProfile] = [
+    UserProfile(
+        id=1,
+        username="luna_art",
+        display_name="Luna Demir",
+        bio="Renkli illüstrasyonlar ve çocuk kitabı karakterleri çiziyorum.",
+        interests=["illüstrasyon", "çocuk kitapları", "pastel"],
+    ),
+    UserProfile(
+        id=2,
+        username="pixelbaran",
+        display_name="Baran Yıldız",
+        bio="Animasyon ve piksel sanatına meraklı bir tasarımcı.",
+        interests=["animasyon", "piksel", "retro"],
+    ),
+    UserProfile(
+        id=3,
+        username="selincreates",
+        display_name="Selin Kara",
+        bio="Çocuklar için STEM temalı çizimler ve posterler hazırlıyorum.",
+        interests=["stem", "poster", "renkli"],
+    ),
+    UserProfile(
+        id=4,
+        username="mert_ai",
+        display_name="Mert Aksoy",
+        bio="Yapay zeka ile sanatı buluşturmaya çalışıyorum.",
+        interests=["ai", "deneysel", "dijital"],
+    ),
+    UserProfile(
+        id=5,
+        username="zeynepdraws",
+        display_name="Zeynep Uçar",
+        bio="Bitki illüstrasyonları ve doğa temalı görseller üretiyorum.",
+        interests=["botanik", "suluboya", "doğa"],
+    ),
+    UserProfile(
+        id=6,
+        username="atlasstory",
+        display_name="Atlas Şahin",
+        bio="Çocuk hikayeleri için konsept sanat ve karakter tasarımı yapıyorum.",
+        interests=["konsept", "karakter", "hikaye"],
+    ),
+    UserProfile(
+        id=7,
+        username="neonmelis",
+        display_name="Melis Kurt",
+        bio="Neon renklerle bilim kurgu sahneleri tasarlıyorum.",
+        interests=["sci-fi", "neon", "fantastik"],
+    ),
+    UserProfile(
+        id=8,
+        username="elifhandmade",
+        display_name="Elif Arslan",
+        bio="Geleneksel el işi desenlerini dijitalleştiriyorum.",
+        interests=["geleneksel", "desen", "dijitalleşme"],
+    ),
+]
+
+
 @app.get("/")
 async def root():
     """API root endpoint"""
     return {"message": "HayAI Art Platform API", "version": "1.0.0"}
+
+
+@app.get("/users/search", response_model=UserSearchResponse)
+async def search_users(q: str = Query("", max_length=50, description="Kullanıcı adı veya isim araması")):
+    """Search users by username or display name."""
+    query = q.strip().lower()
+
+    if not query:
+        matches = FAKE_USERS[:5]
+    else:
+        matches = [
+            user for user in FAKE_USERS
+            if query in user.username.lower() or query in user.display_name.lower()
+        ][:10]
+
+    return UserSearchResponse(
+        query=q,
+        count=len(matches),
+        results=matches,
+    )
 
 
 @app.post("/upload/")
