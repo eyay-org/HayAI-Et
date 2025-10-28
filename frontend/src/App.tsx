@@ -23,6 +23,26 @@ interface GalleryItem {
   emoji?: string; // Custom emoji for the image
 }
 
+interface UserProfile {
+  id: number;
+  username: string;
+  displayName: string;
+  bio: string;
+  interests: string[];
+}
+
+interface SearchApiResponse {
+  query: string;
+  count: number;
+  results: Array<{
+    id: number;
+    username: string;
+    display_name: string;
+    bio: string;
+    interests?: string[];
+  }>;
+}
+
 function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string>("");
@@ -37,6 +57,7 @@ function App() {
     text: string;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [magnifiedImages, setMagnifiedImages] = useState<{
     original: string;
     improved: string;
@@ -51,6 +72,14 @@ function App() {
   const [editEmoji, setEditEmoji] = useState<string>('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
+  const [activePage, setActivePage] = useState<'home' | 'search' | 'discover'>('home');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const searchAbortController = React.useRef<AbortController | null>(null);
+  const searchDelayRef = React.useRef<number | undefined>(undefined);
 
   React.useEffect(() => {
     const storedAuth = localStorage.getItem('hayai-auth');
@@ -60,6 +89,7 @@ function App() {
         if (parsed?.username) {
           setIsAuthenticated(true);
           setCurrentUser(parsed.username);
+          setActivePage('home');
         }
       } catch (error) {
         console.error('Error loading auth state:', error);
@@ -90,15 +120,119 @@ function App() {
     localStorage.setItem('hayai-gallery', JSON.stringify(gallery));
   }, [gallery]);
 
+  React.useEffect(() => {
+    if (activePage !== 'search') {
+      setSearchQuery('');
+      setSelectedUser(null);
+    }
+  }, [activePage]);
+
+  React.useEffect(() => {
+    const trimmedQuery = searchQuery.trim();
+
+    if (activePage !== 'search') {
+      setSearchLoading(false);
+      setSearchResults([]);
+      setSearchError(null);
+      if (searchAbortController.current) {
+        searchAbortController.current.abort();
+        searchAbortController.current = null;
+      }
+      if (searchDelayRef.current !== undefined) {
+        window.clearTimeout(searchDelayRef.current);
+        searchDelayRef.current = undefined;
+      }
+      return;
+    }
+
+    if (searchDelayRef.current !== undefined) {
+      window.clearTimeout(searchDelayRef.current);
+      searchDelayRef.current = undefined;
+    }
+
+    if (trimmedQuery.length < 2) {
+      if (searchAbortController.current) {
+        searchAbortController.current.abort();
+        searchAbortController.current = null;
+      }
+
+      setSearchLoading(false);
+      setSearchResults([]);
+      setSearchError(null);
+      return;
+    }
+
+    setSearchLoading(true);
+    setSearchError(null);
+
+    const controller = new AbortController();
+    searchAbortController.current = controller;
+
+    searchDelayRef.current = window.setTimeout(async () => {
+      try {
+        const response = await axios.get<SearchApiResponse>(
+          "http://localhost:8000/users/search",
+          {
+            params: { q: trimmedQuery },
+            signal: controller.signal,
+          }
+        );
+
+        const mappedResults = response.data.results.map((user) => ({
+          id: user.id,
+          username: user.username,
+          displayName: user.display_name,
+          bio: user.bio,
+          interests: user.interests ?? [],
+        }));
+
+        setSearchResults(mappedResults);
+        setSearchError(
+          response.data.count === 0
+            ? "Arama kriterinize uygun kullanıcı bulunamadı."
+            : null
+        );
+      } catch (error: any) {
+        if (!axios.isCancel(error)) {
+          console.error('User search error:', error);
+          setSearchError('Kullanıcı araması yapılırken bir hata oluştu.');
+        }
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 350);
+
+    return () => {
+      controller.abort();
+      if (searchAbortController.current === controller) {
+        searchAbortController.current = null;
+      }
+      if (searchDelayRef.current !== undefined) {
+        window.clearTimeout(searchDelayRef.current);
+        searchDelayRef.current = undefined;
+      }
+    };
+  }, [searchQuery, activePage]);
+
   const handleLoginSuccess = (username: string) => {
     setIsAuthenticated(true);
     setCurrentUser(username);
+    setSelectedUser(null);
+    setSearchQuery('');
+    setSearchResults([]);
+    setSearchError(null);
+    setActivePage('home');
     localStorage.setItem('hayai-auth', JSON.stringify({ username, timestamp: Date.now() }));
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
     setCurrentUser(null);
+    setSelectedUser(null);
+    setSearchQuery('');
+    setSearchResults([]);
+    setSearchError(null);
+    setActivePage('home');
     localStorage.removeItem('hayai-auth');
   };
 
@@ -314,6 +448,18 @@ function App() {
     });
   };
 
+  const handleSearchInput = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(event.target.value);
+  };
+
+  const handleSelectUser = (user: UserProfile) => {
+    setSelectedUser(user);
+  };
+
+  const clearSelectedUser = () => {
+    setSelectedUser(null);
+  };
+
   // Available emojis for selection - organized by popularity for children
   const availableEmojis = [
     // Most Popular - Animals (kids love animals!)
@@ -379,197 +525,333 @@ function App() {
     <div className="App">
       <div className="container">
         <header className="header">
-          {currentUser && (
-            <div className="user-session">
-              <span className="user-greeting">👋 {currentUser}</span>
-              <button className="logout-button" onClick={handleLogout}>
-                Çıkış Yap
-              </button>
-            </div>
-          )}
-          <h1>🎨 HayAI Art Platform</h1>
-          <p>Çiziminizi yükleyin ve AI ile dönüştürün!</p>
-          <nav className="navigation">
-            <button 
-              className={`nav-button ${currentView === 'upload' ? 'active' : ''}`}
-              onClick={() => setCurrentView('upload')}
+          <div className="header-top">
+            {currentUser && (
+              <div className="user-session">
+                <span className="user-greeting">👋 {currentUser}</span>
+                <button className="logout-button" onClick={handleLogout}>
+                  Çıkış Yap
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="header-hero">
+            <h1>🎨 HayAI Art Platform</h1>
+            <p>Çocuklar için AI destekli sanat deneyimi.</p>
+          </div>
+          <nav className="primary-nav">
+            <button
+              type="button"
+              className={`primary-nav-button ${activePage === 'home' ? 'active' : ''}`}
+              onClick={() => setActivePage('home')}
             >
-              📤 Yükle
+              🏠 Ana Sayfa
             </button>
-            <button 
-              className={`nav-button ${currentView === 'gallery' ? 'active' : ''}`}
-              onClick={() => setCurrentView('gallery')}
+            <button
+              type="button"
+              className={`primary-nav-button ${activePage === 'search' ? 'active' : ''}`}
+              onClick={() => setActivePage('search')}
             >
-              🖼️ Galeri ({gallery.length})
+              🔍 Arama
+            </button>
+            <button
+              type="button"
+              className="primary-nav-button disabled"
+              disabled
+            >
+              ✨ Keşfet (yakında)
             </button>
           </nav>
         </header>
 
         <main className="main">
-          {currentView === 'upload' ? (
-            <div className="content-wrapper">
-              <div className="upload-section">
-                <div
-                  className="upload-area"
-                  onDrop={handleDrop}
-                  onDragOver={handleDragOver}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    style={{ display: "none" }}
-                  />
+          {activePage === 'home' && (
+            <section className="studio-section">
+              <div className="studio-header">
+                <div>
+                  <h2>🎛️ Stüdyo</h2>
+                  <p>Merhaba @{currentUser || 'misafir'}! Çizimini yükle ya da koleksiyonunu incele.</p>
+                </div>
+                <nav className="navigation">
+                  <button
+                    className={`nav-button ${currentView === 'upload' ? 'active' : ''}`}
+                    onClick={() => setCurrentView('upload')}
+                  >
+                    📤 Yükle
+                  </button>
+                  <button
+                    className={`nav-button ${currentView === 'gallery' ? 'active' : ''}`}
+                    onClick={() => setCurrentView('gallery')}
+                  >
+                    🖼️ Galeri ({gallery.length})
+                  </button>
+                </nav>
+              </div>
 
-                  {!preview ? (
-                    <div className="upload-content">
-                      <div className="upload-icon">📁</div>
-                      <h3>Çiziminizi Seçin</h3>
-                      <p>Tıklayın veya sürükleyip bırakın</p>
-                      <button className="select-button">Dosya Seç</button>
-                    </div>
-                  ) : (
-                    <div className="preview-content">
-                      <img src={preview} alt="Preview" className="preview-image" />
-                      <div className="file-info">
-                        <p>
-                          <strong>Dosya:</strong> {selectedFile?.name}
-                        </p>
-                        <p>
-                          <strong>Boyut:</strong>{" "}
-                          {(selectedFile?.size! / 1024 / 1024).toFixed(2)} MB
-                        </p>
+              {currentView === 'upload' ? (
+                  <div className="content-wrapper">
+                    <div className="upload-section">
+                      <div
+                        className="upload-area"
+                        onDrop={handleDrop}
+                        onDragOver={handleDragOver}
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileChange}
+                          style={{ display: "none" }}
+                        />
+
+                        {!preview ? (
+                          <div className="upload-content">
+                            <div className="upload-icon">📁</div>
+                            <h3>Çiziminizi Seçin</h3>
+                            <p>Tıklayın veya sürükleyip bırakın</p>
+                            <button className="select-button">Dosya Seç</button>
+                          </div>
+                        ) : (
+                          <div className="preview-content">
+                            <img src={preview} alt="Preview" className="preview-image" />
+                            <div className="file-info">
+                              <p>
+                                <strong>Dosya:</strong> {selectedFile?.name}
+                              </p>
+                              <p>
+                                <strong>Boyut:</strong>{" "}
+                                {(selectedFile?.size! / 1024 / 1024).toFixed(2)} MB
+                              </p>
+                            </div>
+                            <button className="clear-button" onClick={clearFile}>
+                              ✕ Temizle
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      <button className="clear-button" onClick={clearFile}>
-                        ✕ Temizle
+
+                      {message && (
+                        <div className={`message ${message.type}`}>{message.text}</div>
+                      )}
+
+                      <button
+                        className="upload-button"
+                        onClick={handleUpload}
+                        disabled={!selectedFile || uploading}
+                      >
+                        {uploading ? "⏳ Yükleniyor..." : "🚀 Yükle ve Dönüştür"}
                       </button>
                     </div>
+
+                    {/* Results Section */}
+                    {uploadedImages && (
+                      <div className="results-section">
+                        <h2>🎨 Sonuçlar</h2>
+                        <div className="image-comparison">
+                          <div className="image-container">
+                            <h3>Orijinal Çizim</h3>
+                            <div className="image-wrapper" onClick={() => openMagnifiedView(uploadedImages.original, uploadedImages.improved, uploadedImages.filename)}>
+                              <img
+                                src={uploadedImages.original}
+                                alt="Orijinal çizim"
+                                className="result-image"
+                              />
+                              <div className="magnify-overlay">
+                                <span className="magnify-icon">🔍</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="vs-divider">
+                            <span>VS</span>
+                          </div>
+                          <div className="image-container">
+                            <h3>AI ile Geliştirilmiş</h3>
+                            <div className="image-wrapper" onClick={() => openMagnifiedView(uploadedImages.original, uploadedImages.improved, uploadedImages.filename)}>
+                              <img
+                                src={uploadedImages.improved}
+                                alt="Geliştirilmiş çizim"
+                                className="result-image"
+                              />
+                              <div className="magnify-overlay">
+                                <span className="magnify-icon">🔍</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <button className="clear-results-button" onClick={clearResults}>
+                          ✕ Sonuçları Temizle
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="gallery-section">
+                    <div className="gallery-header">
+                      <h2>🖼️ Sanat Galerim</h2>
+                      <p>AI ile geliştirilmiş çizimlerinizin koleksiyonu</p>
+                      {gallery.length > 0 && (
+                        <button className="clear-gallery-button" onClick={clearGallery}>
+                          🗑️ Galeriyi Temizle
+                        </button>
+                      )}
+                    </div>
+                    {gallery.length === 0 ? (
+                      <div className="empty-gallery">
+                        <div className="empty-icon">🎨</div>
+                        <h3>Henüz çizim yok!</h3>
+                        <p>İlk çiziminizi yükleyip AI ile geliştirin</p>
+                        <button className="upload-first-button" onClick={() => setCurrentView('upload')}>
+                          📤 İlk Çizimi Yükle
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="photo-gallery">
+                        {gallery.map((item) => (
+                          <div key={item.id} className="photo-item">
+                            <div className="photo-header">
+                              <div className="photo-title">
+                                <span className="photo-emoji">{item.emoji || '🎨'}</span>
+                                <span className="photo-title-text">
+                                  {item.title || item.filename}
+                                </span>
+                              </div>
+                              <div className="photo-actions">
+                                <button
+                                  className="edit-photo-button"
+                                  onClick={() => openEditModal(item)}
+                                  title="Başlık ve emoji düzenle"
+                                >
+                                  ✏️
+                                </button>
+                                <button
+                                  className="remove-photo-button"
+                                  onClick={() => removeFromGallery(item.id)}
+                                  title="Galeriden kaldır"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            </div>
+                            <div className="photo-comparison" onClick={() => openMagnifiedView(item.original, item.improved, item.filename, item.title, item.emoji)}>
+                              <div className="photo-original">
+                                <img src={item.original} alt="Orijinal" className="photo-image" />
+                                <span className="photo-label">Orijinal</span>
+                              </div>
+                              <div className="photo-improved">
+                                <img src={item.improved} alt="AI Geliştirilmiş" className="photo-image" />
+                                <span className="photo-label">AI Geliştirilmiş</span>
+                              </div>
+                              <div className="photo-overlay">
+                                <span className="magnify-icon">🔍</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+            </section>
+          )}
+
+          {activePage === 'search' && (
+            <section className="search-page">
+              <div className="search-hero">
+                <h2>Arkadaşlarını Bul</h2>
+                <p>İsimleri yazarak diğer sanatçıları keşfedin ve arkadaş listenize ekleyin.</p>
+              </div>
+              <div className="search-form">
+                <label htmlFor="search-page-input" className="visually-hidden">Kullanıcı ara</label>
+                <div className="search-form-field">
+                  <input
+                    id="search-page-input"
+                    type="search"
+                    ref={searchInputRef}
+                    className="search-page-input"
+                    value={searchQuery}
+                    onChange={handleSearchInput}
+                    placeholder="Kullanıcı adı veya isim yazın..."
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    className="search-page-button"
+                    onClick={() => searchInputRef.current?.focus()}
+                  >
+                    Ara
+                  </button>
+                </div>
+              </div>
+
+              <div className="search-layout">
+                <div className="search-results-panel">
+                  {searchQuery.trim().length < 2 && (
+                    <p className="search-info">Arama yapmak için en az iki karakter yazın.</p>
+                  )}
+                  {searchQuery.trim().length >= 2 && searchLoading && (
+                    <p className="search-info">Arama yapılıyor...</p>
+                  )}
+                  {searchQuery.trim().length >= 2 && !searchLoading && searchError && (
+                    <p className="search-info error">{searchError}</p>
+                  )}
+                  {searchQuery.trim().length >= 2 && !searchLoading && !searchError && searchResults.length === 0 && (
+                    <p className="search-info">Sonuç bulunamadı.</p>
+                  )}
+                  {searchQuery.trim().length >= 2 && !searchLoading && !searchError && searchResults.length > 0 && (
+                    <ul className="search-results-list">
+                      {searchResults.map((user) => (
+                        <li key={user.id}>
+                          <button type="button" className={`search-result-item ${selectedUser?.id === user.id ? 'active' : ''}`} onClick={() => handleSelectUser(user)}>
+                            <span className="search-result-name">{user.displayName}</span>
+                            <span className="search-result-username">@{user.username}</span>
+                            <span className="search-result-bio">{user.bio}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </div>
-
-                {message && (
-                  <div className={`message ${message.type}`}>{message.text}</div>
-                )}
-
-                <button
-                  className="upload-button"
-                  onClick={handleUpload}
-                  disabled={!selectedFile || uploading}
-                >
-                  {uploading ? "⏳ Yükleniyor..." : "🚀 Yükle ve Dönüştür"}
-                </button>
+                <aside className="search-profile-panel">
+                  {selectedUser ? (
+                    <div className="profile-preview">
+                      <div className="profile-header">
+                        <div>
+                          <h3>{selectedUser.displayName}</h3>
+                          <p className="profile-username">@{selectedUser.username}</p>
+                        </div>
+                        <button type="button" className="profile-close" onClick={clearSelectedUser}>
+                          Kapat
+                        </button>
+                      </div>
+                      <p className="profile-bio">{selectedUser.bio}</p>
+                      {selectedUser.interests.length > 0 && (
+                        <div className="profile-tags">
+                          {selectedUser.interests.map((interest) => (
+                            <span key={interest} className="profile-tag">
+                              #{interest}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <p className="profile-placeholder">Profil sayfası yakında aktif olacak.</p>
+                    </div>
+                  ) : (
+                    <div className="search-empty-state">
+                      <span className="search-empty-icon">🔍</span>
+                      <p>Bir kullanıcı seçtiğinizde profil önizlemesi burada görünecek.</p>
+                    </div>
+                  )}
+                </aside>
               </div>
+            </section>
+          )}
 
-              {/* Results Section */}
-              {uploadedImages && (
-                <div className="results-section">
-                  <h2>🎨 Sonuçlar</h2>
-                  <div className="image-comparison">
-                    <div className="image-container">
-                      <h3>Orijinal Çizim</h3>
-                      <div className="image-wrapper" onClick={() => openMagnifiedView(uploadedImages.original, uploadedImages.improved, uploadedImages.filename)}>
-                        <img
-                          src={uploadedImages.original}
-                          alt="Orijinal çizim"
-                          className="result-image"
-                        />
-                        <div className="magnify-overlay">
-                          <span className="magnify-icon">🔍</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="vs-divider">
-                      <span>VS</span>
-                    </div>
-                    <div className="image-container">
-                      <h3>AI ile Geliştirilmiş</h3>
-                      <div className="image-wrapper" onClick={() => openMagnifiedView(uploadedImages.original, uploadedImages.improved, uploadedImages.filename)}>
-                        <img
-                          src={uploadedImages.improved}
-                          alt="Geliştirilmiş çizim"
-                          className="result-image"
-                        />
-                        <div className="magnify-overlay">
-                          <span className="magnify-icon">🔍</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <button className="clear-results-button" onClick={clearResults}>
-                    ✕ Sonuçları Temizle
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="gallery-section">
-              <div className="gallery-header">
-                <h2>🖼️ Sanat Galerim</h2>
-                <p>AI ile geliştirilmiş çizimlerinizin koleksiyonu</p>
-                {gallery.length > 0 && (
-                  <button className="clear-gallery-button" onClick={clearGallery}>
-                    🗑️ Galeriyi Temizle
-                  </button>
-                )}
-              </div>
-              
-              {gallery.length === 0 ? (
-                <div className="empty-gallery">
-                  <div className="empty-icon">🎨</div>
-                  <h3>Henüz çizim yok!</h3>
-                  <p>İlk çiziminizi yükleyip AI ile geliştirin</p>
-                  <button className="upload-first-button" onClick={() => setCurrentView('upload')}>
-                    📤 İlk Çizimi Yükle
-                  </button>
-                </div>
-              ) : (
-                <div className="photo-gallery">
-                  {gallery.map((item) => (
-                    <div key={item.id} className="photo-item">
-                      <div className="photo-header">
-                        <div className="photo-title">
-                          <span className="photo-emoji">{item.emoji || '🎨'}</span>
-                          <span className="photo-title-text">
-                            {item.title || item.filename}
-                          </span>
-                        </div>
-                        <div className="photo-actions">
-                          <button 
-                            className="edit-photo-button"
-                            onClick={() => openEditModal(item)}
-                            title="Başlık ve emoji düzenle"
-                          >
-                            ✏️
-                          </button>
-                          <button 
-                            className="remove-photo-button"
-                            onClick={() => removeFromGallery(item.id)}
-                            title="Galeriden kaldır"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </div>
-                      <div className="photo-comparison" onClick={() => openMagnifiedView(item.original, item.improved, item.filename, item.title, item.emoji)}>
-                        <div className="photo-original">
-                          <img src={item.original} alt="Orijinal" className="photo-image" />
-                          <span className="photo-label">Orijinal</span>
-                        </div>
-                        <div className="photo-improved">
-                          <img src={item.improved} alt="AI Geliştirilmiş" className="photo-image" />
-                          <span className="photo-label">AI Geliştirilmiş</span>
-                        </div>
-                        <div className="photo-overlay">
-                          <span className="magnify-icon">🔍</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+          {activePage === 'discover' && (
+            <section className="discover-placeholder">
+              <h2>✨ Keşfet</h2>
+              <p>Topluluk gönderilerini burada göstereceğiz. Çok yakında!</p>
+            </section>
           )}
         </main>
 
