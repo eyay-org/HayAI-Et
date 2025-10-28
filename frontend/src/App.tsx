@@ -835,6 +835,11 @@ function App() {
                         </div>
                       )}
                       <p className="profile-placeholder">Profil sayfası yakında aktif olacak.</p>
+                      <div className="profile-actions">
+                        <button type="button" className="add-friend-button">
+                          🤝 Arkadaş Olarak Ekle
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div className="search-empty-state">

@@ -571,6 +571,33 @@
   opacity: 0.85;
 }
 
+.profile-actions {
+  margin-top: 18px;
+  display: flex;
+  gap: 12px;
+}
+
+.add-friend-button {
+  background: linear-gradient(135deg, var(--color-support), #b2f2bb);
+  border: none;
+  color: #0c5132;
+  padding: 12px 22px;
+  border-radius: 18px;
+  font-size: 1em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 10px 24px rgba(140, 233, 154, 0.25);
+}
+
+.add-friend-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px rgba(140, 233, 154, 0.3);
+}
+
 .upload-section {
   background: linear-gradient(135deg, rgba(200, 182, 255, 0.24), #ffffff);
   border-radius: 20px;
