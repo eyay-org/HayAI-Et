@@ -1,0 +1,121 @@
+[
+  {
+    "id": 1,
+    "username": "hayai",
+    "display_name": "HayAI Kullanıcısı",
+    "bio": "HayAI Art Platform'unda çizimlerimi paylaşıyorum! 🎨",
+    "interests": [
+      "ai",
+      "sanat",
+      "çizim"
+    ],
+    "avatar_name": null
+  },
+  {
+    "id": 2,
+    "username": "guest",
+    "display_name": "Misafir Kullanıcı",
+    "bio": "HayAI Art Platform'unda çizimlerimi paylaşıyorum! 🎨",
+    "interests": [
+      "sanat",
+      "çizim"
+    ],
+    "avatar_name": "avatar-7.jpg"
+  },
+  {
+    "id": 3,
+    "username": "luna_art",
+    "display_name": "Luna Demir",
+    "bio": "Renkli illüstrasyonlar ve çocuk kitabı karakterleri çiziyorum.",
+    "interests": [
+      "illüstrasyon",
+      "çocuk kitapları",
+      "pastel"
+    ],
+    "avatar_name": null
+  },
+  {
+    "id": 4,
+    "username": "pixelbaran",
+    "display_name": "Baran Yıldız",
+    "bio": "Animasyon ve piksel sanatına meraklı bir tasarımcı.",
+    "interests": [
+      "animasyon",
+      "piksel",
+      "retro"
+    ],
+    "avatar_name": null
+  },
+  {
+    "id": 5,
+    "username": "selincreates",
+    "display_name": "Selin Kara",
+    "bio": "Çocuklar için STEM temalı çizimler ve posterler hazırlıyorum.",
+    "interests": [
+      "stem",
+      "poster",
+      "renkli"
+    ],
+    "avatar_name": null
+  },
+  {
+    "id": 6,
+    "username": "mert_ai",
+    "display_name": "Mert Aksoy",
+    "bio": "Yapay zeka ile sanatı buluşturmaya çalışıyorum.",
+    "interests": [
+      "ai",
+      "deneysel",
+      "dijital"
+    ],
+    "avatar_name": null
+  },
+  {
+    "id": 7,
+    "username": "zeynepdraws",
+    "display_name": "Zeynep Uçar",
+    "bio": "Bitki illüstrasyonları ve doğa temalı görseller üretiyorum.",
+    "interests": [
+      "botanik",
+      "suluboya",
+      "doğa"
+    ],
+    "avatar_name": null
+  },
+  {
+    "id": 8,
+    "username": "atlasstory",
+    "display_name": "Atlas Şahin",
+    "bio": "Çocuk hikayeleri için konsept sanat ve karakter tasarımı yapıyorum.",
+    "interests": [
+      "konsept",
+      "karakter",
+      "hikaye"
+    ],
+    "avatar_name": null
+  },
+  {
+    "id": 9,
+    "username": "neonmelis",
+    "display_name": "Melis Kurt",
+    "bio": "Neon renklerle bilim kurgu sahneleri tasarlıyorum.",
+    "interests": [
+      "sci-fi",
+      "neon",
+      "fantastik"
+    ],
+    "avatar_name": null
+  },
+  {
+    "id": 10,
+    "username": "elifhandmade",
+    "display_name": "Elif Arslan",
+    "bio": "Geleneksel el işi desenlerini dijitalleştiriyorum.",
+    "interests": [
+      "geleneksel",
+      "desen",
+      "dijitalleşme"
+    ],
+    "avatar_name": null
+  }
+]

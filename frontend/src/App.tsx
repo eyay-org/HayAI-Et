@@ -29,7 +29,8 @@ interface UserProfile {
   displayName: string;
   bio: string;
   interests: string[];
-  avatar_name?: string | null; // Avatar filename (e.g., "avatar1.png")
+  avatar_name?: string | null;
+  posts?: Array<{ original: string; improved: string }>; 
 }
 
 interface AvatarInfo {
@@ -263,22 +264,56 @@ function App() {
   }, [viewingProfile, currentUser]);
 
   // Load gallery from localStorage on component mount
+// YENİ: Profil değiştiğinde veya ana sayfaya dönüldüğünde sunucudan resimleri çek
   React.useEffect(() => {
-    const savedGallery = localStorage.getItem('hayai-gallery');
-    if (savedGallery) {
-      try {
-        const parsedGallery = JSON.parse(savedGallery);
-        // Migrate old gallery items that don't have originalFilename
-        const migratedGallery = parsedGallery.map((item: any) => ({
-          ...item,
-          originalFilename: item.originalFilename || null, // Add null for old items
-        }));
-        setGallery(migratedGallery);
-      } catch (error) {
-        console.error('Error loading gallery from localStorage:', error);
+    const fetchBackendGallery = async () => {
+      // Hangi kullanıcının galerisini göstereceğiz?
+      // viewingProfile varsa (başkasının profili) onun ID'si, yoksa kendi ID'miz.
+      let targetUserId: number | null = null;
+      
+      if (viewingProfile) {
+        targetUserId = viewingProfile.id;
+      } else {
+        targetUserId = getCurrentUserId();
       }
+
+      if (!targetUserId) return;
+
+      try {
+        // Kullanıcı bilgilerini (ve postlarını) çek
+        const response = await axios.get<UserProfile>(`http://localhost:8000/users/${targetUserId}`);
+        // Backend'den gelen veriyi işle
+        const userPosts = response.data.posts || [];
+
+        const backendGallery: GalleryItem[] = userPosts.map((post, index) => ({
+          // post artık bir obje: { original: "...", improved: "..." }
+          id: `backend_${index}_${post.original}`,
+          
+          // İŞTE DÜZELEN KISIM BURASI:
+          original: `http://localhost:8000/uploads/${post.original}`, 
+          improved: `http://localhost:8000/uploads/${post.improved}`,
+          
+          filename: "AI Çizimi",
+          originalFilename: post.original, // Silme işlemi için orijinal isim önemli
+          timestamp: Date.now(),
+          title: "Çizim", 
+          emoji: "🎨"
+        }));
+
+        setGallery(backendGallery);
+        
+      } catch (error) {
+        console.error("Galeri yüklenirken hata:", error);
+      }
+    };
+
+    // Sadece "Profil" sayfasındaysak veya Ana sayfadaysak çalıştır
+    // (Search sayfasında çalışıp durmasın)
+    if (activePage === 'home' || currentView === 'profile') {
+        fetchBackendGallery();
     }
-  }, []);
+    
+  }, [viewingProfile, currentUser, currentView, activePage]);
 
   // Save gallery to localStorage whenever it changes
   React.useEffect(() => {
@@ -451,6 +486,12 @@ function App() {
 
     const formData = new FormData();
     formData.append("file", selectedFile);
+    
+    // YENİ: Kullanıcı ID'sini ekle
+    const currentUserId = getCurrentUserId();
+    if (currentUserId) {
+      formData.append("user_id", currentUserId.toString());
+    }
 
     try {
       const response = await axios.post<UploadResponse>(

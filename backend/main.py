@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import aiofiles
@@ -9,6 +9,10 @@ import gc
 from typing import List, Dict, Set
 from pydantic import BaseModel
 from services.image_transformer import transform_image
+import json
+
+# Base directory (the backend package directory) so files live under `backend/`
+BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(title="HayAI Art Platform", version="1.0.0")
 
@@ -20,22 +24,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create uploads directory
-UPLOAD_DIR = Path("uploads")
+# Create uploads directory under backend
+UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-# Create avatars directory
-AVATARS_DIR = Path("avatars")
+# Create avatars directory under backend
+AVATARS_DIR = BASE_DIR / "avatars"
 AVATARS_DIR.mkdir(exist_ok=True)
 
 
+# Mevcut UserProfile sınıfını bununla değiştir:
 class UserProfile(BaseModel):
     id: int
     username: str
     display_name: str
     bio: str
     interests: List[str] = []
-    avatar_name: str | None = None  # Avatar filename (e.g., "avatar1.png")
+    avatar_name: str | None = None
+    # DEĞİŞTİ: Artık str listesi değil, sözlük (Dict) listesi
+    posts: List[Dict[str, str]] = []
 
 
 class AvatarInfo(BaseModel):
@@ -49,8 +56,8 @@ class UserSearchResponse(BaseModel):
     results: List[UserProfile]
 
 
-# Follow relations file path
-FOLLOW_RELATIONS_FILE = Path("follow_relations.json")
+# Follow relations file path (persisted under backend)
+FOLLOW_RELATIONS_FILE = BASE_DIR / "follow_relations.json"
 
 # In-memory follow relations: {user_id: set of user_ids that this user follows}
 FOLLOW_RELATIONS: Dict[int, Set[int]] = {}
@@ -84,6 +91,36 @@ def save_follow_relations():
 
 # Load follow relations on startup
 load_follow_relations()
+
+# User profiles persistence
+USER_PROFILES_FILE = BASE_DIR / "user_profiles.json"
+
+def save_user_profiles():
+    """Save current users to JSON file"""
+    try:
+        data = [u.dict() for u in FAKE_USERS]
+        with open(USER_PROFILES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Error saving user profiles: {e}")
+
+def load_user_profiles():
+    """Load user profiles from JSON file if present, otherwise write defaults."""
+    global FAKE_USERS
+    if USER_PROFILES_FILE.exists():
+        try:
+            with open(USER_PROFILES_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                loaded = []
+                for item in data:
+                    # Ensure keys match the Pydantic model
+                    loaded.append(UserProfile(**item))
+                FAKE_USERS = loaded
+        except Exception as e:
+            print(f"Error loading user profiles: {e}")
+    else:
+        # Persist initial in-memory users for future runs
+        save_user_profiles()
 
 # Helper function to get available avatars
 def get_available_avatars() -> List[AvatarInfo]:
@@ -195,6 +232,9 @@ FAKE_USERS: List[UserProfile] = [
     ),
 ]
 
+# Load persisted user profiles (if present) so avatars and other changes persist
+load_user_profiles()
+
 
 @app.get("/")
 async def root():
@@ -202,13 +242,38 @@ async def root():
     return {"message": "HayAI Art Platform API", "version": "1.0.0"}
 
 
-@app.get("/users/{user_id}", response_model=UserProfile)
-async def get_user(user_id: int):
-    """Get user profile by ID"""
-    user = next((u for u in FAKE_USERS if u.id == user_id), None)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
+@app.get("/users/search", response_model=UserSearchResponse)
+async def search_users(q: str = Query("", max_length=50, description="Kullanıcı adı veya isim araması")):
+    """
+    Hem '@kullaniciadi' hem de 'Ad Soyad' aramalarını destekler.
+    """
+    
+    # 1. Temizlik: Önce boşlukları al, sonra küçük harfe çevir.
+    raw_query = q.strip().lower()
+    
+    # 2. Kritik Hamle: Eğer başta '@' varsa onu atıyoruz.
+    #    - "@luna_art" yazdıysa -> "luna_art" olur (Username ile eşleşir).
+    #    - "luna demir" yazdıysa -> "luna demir" kalır (Display Name ile eşleşir).
+    query = raw_query.lstrip("@")
+    
+    print(f"Gelen: '{q}' -> Aranan: '{query}'")
+
+    # Login kullanıcılarını (id 1 ve 2) listeden çıkar
+    searchable_users = FAKE_USERS
+
+    if not query:
+        matches = searchable_users[:5]
+    else:
+        matches = [
+            user for user in searchable_users
+            if query in user.username.lower() or query in user.display_name.lower()
+        ][:10]
+
+    return UserSearchResponse(
+        query=q,
+        count=len(matches),
+        results=matches,
+    )
 
 
 @app.get("/avatars", response_model=List[AvatarInfo])
@@ -231,41 +296,54 @@ async def set_user_avatar(user_id: int, avatar_name: str = Query(..., descriptio
     
     # Update user avatar
     user.avatar_name = avatar_name
-    
+    # Persist change so avatar survives server restarts
+    save_user_profiles()
+
     return {"message": "Avatar updated successfully", "avatar_name": avatar_name}
 
 
-@app.get("/users/search", response_model=UserSearchResponse)
-async def search_users(q: str = Query("", max_length=50, description="Kullanıcı adı veya isim araması")):
-    """Search users by username or display name."""
-    query = q.strip().lower()
+# Mevcut get_user fonksiyonunu SİL ve yerine bunu yapıştır:
 
-    # Exclude login users (hayai and guest) from search results
-    searchable_users = [user for user in FAKE_USERS if user.id not in [1, 2]]
+@app.get("/users/{user_id}", response_model=UserProfile)
+async def get_user(user_id: int):
+    """Kullanıcıyı ve detaylı paylaşımlarını getirir"""
+    user = next((u for u in FAKE_USERS if u.id == user_id), None)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user_posts = []
+    posts_file = BASE_DIR / "posts.json"
+    if posts_file.exists():
+        try:
+            with open(posts_file, "r", encoding="utf-8") as f:
+                all_posts = json.load(f)
+                # SADECE BU KISIM DEĞİŞTİ:
+                # Eskiden sadece ismini alıyorduk, şimdi objeyi temizleyip alıyoruz
+                for p in all_posts:
+                    if p.get("user_id") == user_id:
+                        user_posts.append({
+                            "original": p.get("image"),          # Orijinal dosya adı
+                            "improved": p.get("improved_image")  # AI çıktısı dosya adı
+                        })
+        except Exception as e:
+            print(f"Post okuma hatası: {e}")
 
-    if not query:
-        matches = searchable_users[:5]
-    else:
-        matches = [
-            user for user in searchable_users
-            if query in user.username.lower() or query in user.display_name.lower()
-        ][:10]
+    user_response = user.copy()
+    user_response.posts = user_posts
+    
+    return user_response
 
-    return UserSearchResponse(
-        query=q,
-        count=len(matches),
-        results=matches,
-    )
-
+# Mevcut /upload/ fonksiyonunu SİL ve yerine bunu yapıştır:
 
 @app.post("/upload/")
-async def upload_file(file: UploadFile = File(...)):
-    """Handle image file uploads and transform them using AI"""
+async def upload_file(
+    file: UploadFile = File(...), 
+    user_id: int = Form(..., description="Yükleyen kullanıcının ID'si") # DEĞİŞEN KISIM BURASI
+):
+    """Resim yükler ve posts.json dosyasına kaydeder."""
     try:
-        # Read file content
+        # 1. Dosyayı fiziksel olarak kaydet
         content = await file.read()
-
-        # Create unique filename
         file_extension = file.filename.split(".")[-1].lower()
         unique_filename = f"{uuid.uuid4()}.{file_extension}"
         file_path = UPLOAD_DIR / unique_filename
@@ -273,21 +351,38 @@ async def upload_file(file: UploadFile = File(...)):
         async with aiofiles.open(file_path, "wb") as out_file:
             await out_file.write(content)
 
-        # Transform image
+        # 2. Görüntüyü işle (AI transformer)
         improved_file_path = transform_image(str(file_path))
-
-        # Extract filename from path (works for both Windows and Unix paths)
         improved_filename = Path(improved_file_path).name
 
+        # 3. JSON VERİTABANINA KAYIT (YENİ BÖLÜM)
+        post_entry = {
+            "user_id": user_id,
+            "image": unique_filename,
+            "improved_image": improved_filename,
+            "timestamp": time.time()
+        }
+
+        posts_file = BASE_DIR / "posts.json"
+        
+        # Mevcut postları oku
+        current_posts = []
+        if posts_file.exists():
+            try:
+                with open(posts_file, "r", encoding="utf-8") as f:
+                    current_posts = json.load(f)
+            except:
+                current_posts = []
+        
+        # Yeni postu ekle ve kaydet
+        current_posts.append(post_entry)
+        with open(posts_file, "w", encoding="utf-8") as f:
+            json.dump(current_posts, f, indent=2)
+
         return {
-            "message": "File uploaded and transformed successfully",
+            "message": "Yükleme ve kayıt başarılı",
             "filename": unique_filename,
-            "improved_filename": improved_filename,
-            "original_filename": file.filename,
-            "file_path": str(file_path),
-            "improved_file_path": improved_file_path,
-            "original_url": f"/uploads/{unique_filename}",
-            "improved_url": f"/uploads/{improved_filename}",
+            "user_id": user_id
         }
 
     except Exception as e:
@@ -448,8 +543,8 @@ async def is_following(user_id: int, target_user_id: int):
 
 
 # Mount static files directory AFTER all endpoints are defined
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-app.mount("/avatars", StaticFiles(directory="avatars"), name="avatars")
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+app.mount("/avatars", StaticFiles(directory=str(AVATARS_DIR)), name="avatars")
 
 
 if __name__ == "__main__":
