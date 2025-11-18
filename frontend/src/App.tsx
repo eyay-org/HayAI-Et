@@ -665,8 +665,17 @@ function App() {
     setSelectedUser(user);
   };
 
-  const handleViewProfile = (user: UserProfile) => {
-    setViewingProfile(user);
+const handleViewProfile = (user: UserProfile) => {
+    const currentUserId = getCurrentUserId();
+    if (user.id === currentUserId) {
+      setViewingProfile(null);
+      setViewingProfileStats(null);
+      setIsFollowing(false);
+    } else {
+      setViewingProfile(user);
+    }
+
+    // Ortak işlemler
     setActivePage('home');
     setCurrentView('profile');
     setSelectedUser(null);

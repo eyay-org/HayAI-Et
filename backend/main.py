@@ -6,8 +6,8 @@ from pathlib import Path
 import uuid
 import time
 import gc
-from typing import List, Dict, Set
-from pydantic import BaseModel
+from typing import List, Dict, Set, Any
+from pydantic import BaseModel, Field 
 from services.image_transformer import transform_image
 import json
 
@@ -37,12 +37,13 @@ AVATARS_DIR.mkdir(exist_ok=True)
 class UserProfile(BaseModel):
     id: int
     username: str
-    display_name: str
+    display_name: str = Field(..., serialization_alias="displayName") 
     bio: str
     interests: List[str] = []
-    avatar_name: str | None = None
-    # DEĞİŞTİ: Artık str listesi değil, sözlük (Dict) listesi
+    avatar_name: str | None = None 
     posts: List[Dict[str, str]] = []
+    class Config:
+        populate_by_name = True
 
 
 class AvatarInfo(BaseModel):
