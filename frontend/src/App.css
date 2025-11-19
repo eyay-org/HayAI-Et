@@ -2362,3 +2362,41 @@
     max-height: 250px;
   }
 }
+
+/* App.css */
+
+.like-button {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e1e1e1;
+  border-radius: 20px;
+  padding: 4px 10px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  margin-right: auto; /* Başlık ile butonları ayırır */
+  margin-left: 10px;
+}
+
+.like-button:hover {
+  background: #fff;
+  transform: scale(1.05);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.like-button.liked {
+  border-color: #ff4b4b;
+  background: #fff0f0;
+}
+
+.like-button.liked .like-count {
+  color: #e02424;
+  font-weight: bold;
+}
+
+.like-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}

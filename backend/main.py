@@ -33,15 +33,15 @@ AVATARS_DIR = BASE_DIR / "avatars"
 AVATARS_DIR.mkdir(exist_ok=True)
 
 
-# Mevcut UserProfile sınıfını bununla değiştir:
 class UserProfile(BaseModel):
     id: int
     username: str
-    display_name: str = Field(..., serialization_alias="displayName") 
+    display_name: str = Field(..., serialization_alias="displayName")
     bio: str
     interests: List[str] = []
-    avatar_name: str | None = None 
-    posts: List[Dict[str, str]] = []
+    avatar_name: str | None = None
+    posts: List[Dict[str, Any]] = [] 
+    
     class Config:
         populate_by_name = True
 
@@ -55,6 +55,10 @@ class UserSearchResponse(BaseModel):
     query: str
     count: int
     results: List[UserProfile]
+
+class LikeRequest(BaseModel):
+    filename: str # Hangi resim? (original filename kullanacağız ID olarak)
+    user_id: int  # Kim beğeniyor?
 
 
 # Follow relations file path (persisted under backend)
@@ -314,23 +318,35 @@ async def get_user(user_id: int):
     
     user_posts = []
     posts_file = BASE_DIR / "posts.json"
+    
+    # Şu anki (istek atan) kullanıcının ID'sini nasıl alacağız?
+    # Bu fonksiyon public olduğu için viewer_id'yi parametre olarak alamayabiliriz.
+    # Ancak Frontend bize "kimin profiline" baktığımızı soruyor.
+    # "Ben bunu beğendim mi?" bilgisini frontend'de hesaplamak daha kolay olabilir ama 
+    # doğrusu backend'den göndermektir. Şimdilik basitlik adına tüm 'liked_by' listesini göndermeyeceğiz,
+    # Frontend'de "giriş yapmış kullanıcı ID'si" ile karşılaştıracağız.
+
     if posts_file.exists():
         try:
             with open(posts_file, "r", encoding="utf-8") as f:
                 all_posts = json.load(f)
-                # SADECE BU KISIM DEĞİŞTİ:
-                # Eskiden sadece ismini alıyorduk, şimdi objeyi temizleyip alıyoruz
                 for p in all_posts:
                     if p.get("user_id") == user_id:
+                        # Beğenenler listesini al, yoksa boş liste ver
+                        liked_by = p.get("liked_by", [])
+                        
                         user_posts.append({
-                            "original": p.get("image"),          # Orijinal dosya adı
-                            "improved": p.get("improved_image")  # AI çıktısı dosya adı
+                            "original": p.get("image"),
+                            "improved": p.get("improved_image"),
+                            "like_count": len(liked_by),     # YENİ: Toplam beğeni
+                            "liked_by": liked_by             # YENİ: Kimler beğendi (ID listesi)
                         })
         except Exception as e:
             print(f"Post okuma hatası: {e}")
 
     user_response = user.copy()
-    user_response.posts = user_posts
+    # Dikkat: UserProfile modelini aşağıda güncelleyeceğiz, şimdilik hata verebilir, panik yapma.
+    user_response.posts = user_posts 
     
     return user_response
 
@@ -541,6 +557,61 @@ async def is_following(user_id: int, target_user_id: int):
     """Check if a user is following another user"""
     is_following = target_user_id in FOLLOW_RELATIONS.get(user_id, set())
     return {"is_following": is_following}
+
+@app.post("/posts/like")
+async def toggle_like(like_data: LikeRequest):
+    """Bir gönderiyi beğenir veya beğeniyi geri alır."""
+    posts_file = BASE_DIR / "posts.json"
+    
+    if not posts_file.exists():
+        raise HTTPException(status_code=404, detail="Post veritabanı bulunamadı")
+    
+    try:
+        # 1. Dosyayı Oku
+        with open(posts_file, "r", encoding="utf-8") as f:
+            all_posts = json.load(f)
+        
+        post_found = False
+        current_likes = 0
+        is_liked = False
+
+        # 2. İlgili postu bul ve güncelle
+        for post in all_posts:
+            # Eşleşme için 'image' (orijinal dosya adı) kullanıyoruz
+            if post.get("image") == like_data.filename:
+                post_found = True
+                
+                # 'liked_by' listesi yoksa oluştur
+                if "liked_by" not in post:
+                    post["liked_by"] = []
+                
+                # Mantık: ID listede varsa çıkar, yoksa ekle
+                if like_data.user_id in post["liked_by"]:
+                    post["liked_by"].remove(like_data.user_id)
+                    is_liked = False
+                else:
+                    post["liked_by"].append(like_data.user_id)
+                    is_liked = True
+                
+                current_likes = len(post["liked_by"])
+                break
+        
+        if not post_found:
+            raise HTTPException(status_code=404, detail="Gönderi bulunamadı")
+
+        # 3. Dosyayı Kaydet
+        with open(posts_file, "w", encoding="utf-8") as f:
+            json.dump(all_posts, f, indent=2)
+            
+        return {
+            "success": True, 
+            "likes": current_likes, 
+            "is_liked": is_liked
+        }
+
+    except Exception as e:
+        print(f"Like hatası: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Mount static files directory AFTER all endpoints are defined

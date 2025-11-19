@@ -21,6 +21,8 @@ interface GalleryItem {
   timestamp: number;
   title?: string; // Custom title for the image
   emoji?: string; // Custom emoji for the image
+  likeCount: number;
+  isLiked: boolean;
 }
 
 interface UserProfile {
@@ -30,7 +32,12 @@ interface UserProfile {
   bio: string;
   interests: string[];
   avatar_name?: string | null;
-  posts?: Array<{ original: string; improved: string }>; 
+  posts?: Array<{ 
+    original: string; 
+    improved: string; 
+    like_count: number; 
+    liked_by: number[] 
+  }>;
 }
 
 interface AvatarInfo {
@@ -285,19 +292,19 @@ function App() {
         // Backend'den gelen veriyi işle
         const userPosts = response.data.posts || [];
 
+        const currentUserId = getCurrentUserId(); // Bunu döngüden önce al
+
         const backendGallery: GalleryItem[] = userPosts.map((post, index) => ({
-          // post artık bir obje: { original: "...", improved: "..." }
           id: `backend_${index}_${post.original}`,
-          
-          // İŞTE DÜZELEN KISIM BURASI:
           original: `http://localhost:8000/uploads/${post.original}`, 
           improved: `http://localhost:8000/uploads/${post.improved}`,
-          
           filename: "AI Çizimi",
-          originalFilename: post.original, // Silme işlemi için orijinal isim önemli
+          originalFilename: post.original,
           timestamp: Date.now(),
           title: "Çizim", 
-          emoji: "🎨"
+          emoji: "🎨",
+          likeCount: post.like_count || 0,
+          isLiked: currentUserId ? (post.liked_by || []).includes(currentUserId) : false
         }));
 
         setGallery(backendGallery);
@@ -456,6 +463,45 @@ function App() {
     }
   };
 
+  // App.tsx içine ekle:
+
+  const handleToggleLike = async (item: GalleryItem) => {
+    const currentUserId = getCurrentUserId();
+    if (!currentUserId) {
+      setMessage({ type: "error", text: "Beğenmek için giriş yapmalısınız!" });
+      return;
+    }
+
+    // 1. Optimistic Update (Sonucu beklemeden ekranı güncelle - daha hızlı hissettirir)
+    const oldGallery = [...gallery];
+    setGallery(prev => prev.map(gItem => {
+      if (gItem.id === item.id) {
+        return {
+          ...gItem,
+          isLiked: !gItem.isLiked,
+          likeCount: gItem.isLiked ? gItem.likeCount - 1 : gItem.likeCount + 1
+        };
+      }
+      return gItem;
+    }));
+
+    try {
+      // 2. Backend'e isteği gönder
+      await axios.post("http://localhost:8000/posts/like", {
+        filename: item.originalFilename, // ID olarak orijinal dosya adını kullanıyoruz
+        user_id: currentUserId
+      });
+      
+      // Backend zaten başarılı dönerse bir şey yapmaya gerek yok,
+      // Optimistic update zaten işi halletti.
+    } catch (error) {
+      // Hata olursa eski haline geri döndür (Rollback)
+      console.error("Like hatası:", error);
+      setGallery(oldGallery);
+      setMessage({ type: "error", text: "Beğeni işlemi başarısız oldu." });
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -525,6 +571,14 @@ function App() {
         filename: newImages.filename,
         originalFilename: response.data.filename, // Store backend filename for deletion
         timestamp: Date.now(),
+        
+        // EKSİK OLAN PARAMETRELER EKLENDİ:
+        likeCount: 0,     // Yeni resmin beğenisi 0 başlar
+        isLiked: false,   // Henüz kimse beğenmediği için false
+        
+        // (Opsiyonel) Başlık ve emoji varsayılanları da eklenebilir:
+        title: "Çizim",
+        emoji: "🎨"
       };
       setGallery(prev => [newGalleryItem, ...prev]);
 
@@ -1195,6 +1249,17 @@ const handleViewProfile = (user: UserProfile) => {
                                     {item.title || item.filename}
                                   </span>
                                 </div>
+                                <button 
+                                className={`like-button ${item.isLiked ? 'liked' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation(); // Resmin büyümesini engelle
+                                  handleToggleLike(item);
+                                }}
+                                title={item.isLiked ? "Beğenmekten vazgeç" : "Beğen"}
+                               >
+                                <span className="like-icon">{item.isLiked ? '❤️' : '🤍'}</span>
+                                <span className="like-count">{item.likeCount}</span>
+                               </button>
                                 {!viewingProfile && (
                                   <div className="photo-actions">
                                     <button
