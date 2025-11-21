@@ -3,6 +3,75 @@ import axios from "axios";
 import "./App.css";
 import Login from "./components/Login";
 
+type TransformMode =
+  | "normal"
+  | "oil"
+  | "neon"
+  | "inverse"
+  | "anime"
+  | "cartoon"
+  | "comic";
+
+interface TransformModeOption {
+  key: TransformMode;
+  label: string;
+  description: string;
+  emoji: string;
+}
+
+const MODE_OPTIONS: TransformModeOption[] = [
+  {
+    key: "normal",
+    label: "Gerçekçi",
+    description: "Doğal renkler ve dengeli ışık.",
+    emoji: "🌟",
+  },
+  {
+    key: "oil",
+    label: "Yağlı Boya",
+    description: "Zengin fırça dokuları ve sıcak ışık.",
+    emoji: "🖌️",
+  },
+  {
+    key: "neon",
+    label: "Neon Işık",
+    description: "Parlak neon renklerle ışıldasın.",
+    emoji: "💡",
+  },
+  {
+    key: "inverse",
+    label: "Negatif",
+    description: "Renkleri tersine çeviren efekt.",
+    emoji: "🔁",
+  },
+  {
+    key: "anime",
+    label: "Anime",
+    description: "Yumuşak gölgeler ve canlı renkler.",
+    emoji: "🌸",
+  },
+  {
+    key: "cartoon",
+    label: "Çizgi Film",
+    description: "Düzgün hatlar ve temiz renkler.",
+    emoji: "🎯",
+  },
+  {
+    key: "comic",
+    label: "Çizgi Roman",
+    description: "Klasik halftone doku hissi.",
+    emoji: "📰",
+  },
+];
+
+const MODE_LOOKUP: Record<TransformMode, TransformModeOption> = MODE_OPTIONS.reduce(
+  (acc, option) => {
+    acc[option.key] = option;
+    return acc;
+  },
+  {} as Record<TransformMode, TransformModeOption>
+);
+
 interface UploadResponse {
   message: string;
   filename: string;
@@ -10,6 +79,8 @@ interface UploadResponse {
   original_filename: string;
   original_url: string;
   improved_url: string;
+  mode: TransformMode;
+  user_id: number;
 }
 
 interface GalleryItem {
@@ -23,6 +94,7 @@ interface GalleryItem {
   emoji?: string; // Custom emoji for the image
   likeCount: number;
   isLiked: boolean;
+  mode?: TransformMode;
 }
 
 interface UserProfile {
@@ -36,7 +108,9 @@ interface UserProfile {
     original: string; 
     improved: string; 
     like_count: number; 
-    liked_by: number[] 
+    liked_by: number[];
+    mode?: TransformMode;
+    original_filename?: string;
   }>;
 }
 
@@ -60,12 +134,14 @@ interface SearchApiResponse {
 
 function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedMode, setSelectedMode] = useState<TransformMode>(MODE_OPTIONS[0].key);
   const [preview, setPreview] = useState<string>("");
   const [uploading, setUploading] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<{
     original: string;
     improved: string;
     filename: string;
+    mode?: TransformMode;
   } | null>(null);
   const [message, setMessage] = useState<{
     type: "success" | "error" | "info";
@@ -79,6 +155,7 @@ function App() {
     filename: string;
     title?: string;
     emoji?: string;
+    mode?: TransformMode;
   } | null>(null);
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
   const [currentView, setCurrentView] = useState<'upload' | 'profile'>('upload');
@@ -109,6 +186,8 @@ function App() {
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const searchAbortController = React.useRef<AbortController | null>(null);
   const searchDelayRef = React.useRef<number | undefined>(undefined);
+
+  const selectedModeMeta = MODE_LOOKUP[selectedMode] ?? MODE_OPTIONS[0];
 
   React.useEffect(() => {
     const storedAuth = localStorage.getItem('hayai-auth');
@@ -298,13 +377,14 @@ function App() {
           id: `backend_${index}_${post.original}`,
           original: `http://localhost:8000/uploads/${post.original}`, 
           improved: `http://localhost:8000/uploads/${post.improved}`,
-          filename: "AI Çizimi",
+          filename: post.original_filename || "AI Çizimi",
           originalFilename: post.original,
           timestamp: Date.now(),
           title: "Çizim", 
           emoji: "🎨",
           likeCount: post.like_count || 0,
-          isLiked: currentUserId ? (post.liked_by || []).includes(currentUserId) : false
+          isLiked: currentUserId ? (post.liked_by || []).includes(currentUserId) : false,
+          mode: post.mode,
         }));
 
         setGallery(backendGallery);
@@ -532,6 +612,7 @@ function App() {
 
     const formData = new FormData();
     formData.append("file", selectedFile);
+    formData.append("mode", selectedMode);
     
     // YENİ: Kullanıcı ID'sini ekle
     const currentUserId = getCurrentUserId();
@@ -552,7 +633,7 @@ function App() {
 
       setMessage({
         type: "success",
-        text: `✅ Başarılı! "${response.data.original_filename}" dosyası yüklendi, dönüştürüldü ve galeriye eklendi!`,
+        text: `✅ Başarılı! "${response.data.original_filename}" dosyası ${MODE_LOOKUP[response.data.mode]?.label ?? response.data.mode} modunda işlendi ve galeriye eklendi!`,
       });
 
       // Set uploaded images for display
@@ -560,6 +641,7 @@ function App() {
         original: `http://localhost:8000${response.data.original_url}`,
         improved: `http://localhost:8000${response.data.improved_url}`,
         filename: response.data.original_filename,
+        mode: response.data.mode,
       };
       setUploadedImages(newImages);
 
@@ -575,10 +657,11 @@ function App() {
         // EKSİK OLAN PARAMETRELER EKLENDİ:
         likeCount: 0,     // Yeni resmin beğenisi 0 başlar
         isLiked: false,   // Henüz kimse beğenmediği için false
+        mode: response.data.mode,
         
         // (Opsiyonel) Başlık ve emoji varsayılanları da eklenebilir:
         title: "Çizim",
-        emoji: "🎨"
+        emoji: selectedModeMeta?.emoji ?? "🎨"
       };
       setGallery(prev => [newGalleryItem, ...prev]);
 
@@ -612,8 +695,15 @@ function App() {
     setMessage(null);
   };
 
-  const openMagnifiedView = (original: string, improved: string, filename: string, title?: string, emoji?: string) => {
-    setMagnifiedImages({ original, improved, filename, title, emoji });
+  const openMagnifiedView = (
+    original: string,
+    improved: string,
+    filename: string,
+    title?: string,
+    emoji?: string,
+    mode?: TransformMode
+  ) => {
+    setMagnifiedImages({ original, improved, filename, title, emoji, mode });
   };
 
   const closeMagnifiedView = () => {
@@ -1009,6 +1099,37 @@ const handleViewProfile = (user: UserProfile) => {
                         )}
                       </div>
 
+                      <div className="mode-selector">
+                        <div className="mode-selector-header">
+                          <h3>AI Dönüşüm Modu</h3>
+                          <p>Görselini hangi stilde görmek istersin?</p>
+                        </div>
+                        <div className="mode-options">
+                          {MODE_OPTIONS.map((option) => {
+                            const isActive = option.key === selectedMode;
+                            return (
+                              <button
+                                key={option.key}
+                                type="button"
+                                className={`mode-option ${isActive ? 'active' : ''}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setSelectedMode(option.key);
+                                }}
+                                aria-pressed={isActive}
+                                disabled={uploading}
+                              >
+                                <span className="mode-option-emoji">{option.emoji}</span>
+                                <span className="mode-option-content">
+                                  <span className="mode-option-title">{option.label}</span>
+                                  <span className="mode-option-description">{option.description}</span>
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
                       {message && (
                         <div className={`message ${message.type}`}>{message.text}</div>
                       )}
@@ -1018,7 +1139,9 @@ const handleViewProfile = (user: UserProfile) => {
                         onClick={handleUpload}
                         disabled={!selectedFile || uploading}
                       >
-                        {uploading ? "⏳ Yükleniyor..." : "🚀 Yükle ve Dönüştür"}
+                        {uploading
+                          ? `⏳ ${selectedModeMeta?.label ?? 'AI'} modu çalışıyor...`
+                          : `🚀 ${selectedModeMeta?.label ?? 'AI'} Modu ile Dönüştür`}
                       </button>
                     </div>
 
@@ -1026,10 +1149,20 @@ const handleViewProfile = (user: UserProfile) => {
                     {uploadedImages && (
                       <div className="results-section">
                         <h2>🎨 Sonuçlar</h2>
+                        {uploadedImages.mode && (
+                          <div className="selected-mode-pill">
+                            <span className="selected-mode-emoji">
+                              {MODE_LOOKUP[uploadedImages.mode]?.emoji || '✨'}
+                            </span>
+                            <span className="selected-mode-label">
+                              {(MODE_LOOKUP[uploadedImages.mode]?.label || uploadedImages.mode) + ' modu'}
+                            </span>
+                          </div>
+                        )}
                         <div className="image-comparison">
                           <div className="image-container">
                             <h3>Orijinal Çizim</h3>
-                            <div className="image-wrapper" onClick={() => openMagnifiedView(uploadedImages.original, uploadedImages.improved, uploadedImages.filename)}>
+                            <div className="image-wrapper" onClick={() => openMagnifiedView(uploadedImages.original, uploadedImages.improved, uploadedImages.filename, uploadedImages.filename, undefined, uploadedImages.mode)}>
                               <img
                                 src={uploadedImages.original}
                                 alt="Orijinal çizim"
@@ -1045,7 +1178,7 @@ const handleViewProfile = (user: UserProfile) => {
                           </div>
                           <div className="image-container">
                             <h3>AI ile Geliştirilmiş</h3>
-                            <div className="image-wrapper" onClick={() => openMagnifiedView(uploadedImages.original, uploadedImages.improved, uploadedImages.filename)}>
+                            <div className="image-wrapper" onClick={() => openMagnifiedView(uploadedImages.original, uploadedImages.improved, uploadedImages.filename, uploadedImages.filename, undefined, uploadedImages.mode)}>
                               <img
                                 src={uploadedImages.improved}
                                 alt="Geliştirilmiş çizim"
@@ -1248,6 +1381,12 @@ const handleViewProfile = (user: UserProfile) => {
                                   <span className="photo-title-text">
                                     {item.title || item.filename}
                                   </span>
+                                  {item.mode && (
+                                    <span className="mode-badge">
+                                      <span className="mode-badge-emoji">{MODE_LOOKUP[item.mode]?.emoji || '✨'}</span>
+                                      <span className="mode-badge-label">{MODE_LOOKUP[item.mode]?.label || item.mode}</span>
+                                    </span>
+                                  )}
                                 </div>
                                 <button 
                                 className={`like-button ${item.isLiked ? 'liked' : ''}`}
@@ -1279,7 +1418,7 @@ const handleViewProfile = (user: UserProfile) => {
                                   </div>
                                 )}
                               </div>
-                              <div className="photo-comparison" onClick={() => openMagnifiedView(item.original, item.improved, item.filename, item.title, item.emoji)}>
+                              <div className="photo-comparison" onClick={() => openMagnifiedView(item.original, item.improved, item.filename, item.title, item.emoji, item.mode)}>
                                 <div className="photo-original">
                                   <img src={item.original} alt="Orijinal" className="photo-image" />
                                   <span className="photo-label">Orijinal</span>
@@ -1441,7 +1580,18 @@ const handleViewProfile = (user: UserProfile) => {
                     alt="AI Geliştirilmiş"
                     className="magnified-image"
                   />
-                  <p className="modal-caption">AI ile Geliştirilmiş</p>
+                  <p className="modal-caption">
+                    AI ile Geliştirilmiş
+                    {magnifiedImages.mode && (
+                      <>
+                        {' '}
+                      <span className="modal-mode-pill">
+                        {MODE_LOOKUP[magnifiedImages.mode]?.emoji || "✨"}
+                        {MODE_LOOKUP[magnifiedImages.mode]?.label || magnifiedImages.mode}
+                      </span>
+                      </>
+                    )}
+                  </p>
                 </div>
               </div>
               <div className="modal-title">

@@ -4,7 +4,7 @@ from PIL import Image
 from constants import client
 
 
-def transform_image(image_path: str) -> str:
+def transform_image(image_path: str, prompt: str) -> str:
     """
     Transform an image using OpenAI's GPT-Image-1 image edit API
     """
@@ -24,14 +24,13 @@ def transform_image(image_path: str) -> str:
     else:  # Square-ish or close to square
         api_size = "1024x1024"
 
-    img = open(image_path, "rb")
-
-    result = client.images.edit(
-        model="gpt-image-1",
-        image=img,
-        prompt="Make this drawing beautiful and realistic",
-        size=api_size,
-    )
+    with open(image_path, "rb") as img:
+        result = client.images.edit(
+            model="gpt-image-1",
+            image=img,
+            prompt=prompt or "Make this drawing beautiful and realistic",
+            size=api_size,
+        )
 
     image_base64 = result.data[0].b64_json
     image_bytes = base64.b64decode(image_base64)

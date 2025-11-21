@@ -7,7 +7,8 @@ import uuid
 import time
 import gc
 from typing import List, Dict, Set, Any
-from pydantic import BaseModel, Field 
+from enum import Enum
+from pydantic import BaseModel, Field
 from services.image_transformer import transform_image
 import json
 
@@ -31,6 +32,49 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 # Create avatars directory under backend
 AVATARS_DIR = BASE_DIR / "avatars"
 AVATARS_DIR.mkdir(exist_ok=True)
+
+
+class TransformMode(str, Enum):
+    NORMAL = "normal"
+    OIL = "oil"
+    NEON = "neon"
+    INVERSE = "inverse"
+    ANIME = "anime"
+    CARTOON = "cartoon"
+    COMIC = "comic"
+
+
+TRANSFORM_MODE_PROMPTS: Dict[str, str] = {
+    TransformMode.NORMAL.value: (
+        "Make this drawing beautiful and realistic while keeping the original composition completely unchanged."
+    ),
+    TransformMode.OIL.value: (
+        "Recreate this drawing with rich oil-painting textures, visible brushstrokes, "
+        "and warm lighting, keeping the original composition completely unchanged."
+    ),
+    TransformMode.NEON.value: (
+        "Color this drawing using glowing neon tones and bright highlights while preserving "
+        "all original shapes and linework."
+    ),
+    TransformMode.INVERSE.value: (
+        "Apply an inverse-color effect to this drawing while keeping all shapes, outlines, "
+        "and composition exactly the same."
+    ),
+    TransformMode.ANIME.value: (
+        "Render this drawing in a soft anime illustration style with gentle shading and "
+        "vibrant colors while keeping all the original figures and proportions the same."
+    ),
+    TransformMode.CARTOON.value: (
+        "Repaint this drawing in a colorful cartoon style with smooth outlines and clean fills, "
+        "without changing any of the original figures or elements."
+    ),
+    TransformMode.COMIC.value: (
+        "Color this drawing in a classic comic-book style with halftone textures, keeping all "
+        "original shapes intact."
+    ),
+}
+
+DEFAULT_TRANSFORM_MODE = TransformMode.NORMAL.value
 
 
 class UserProfile(BaseModel):
@@ -335,9 +379,14 @@ async def get_user(user_id: int):
                         # Beğenenler listesini al, yoksa boş liste ver
                         liked_by = p.get("liked_by", [])
                         
+                        mode_value = p.get("mode") or TransformMode.NORMAL.value
+                        original_filename = p.get("original_filename") or p.get("image")
+
                         user_posts.append({
                             "original": p.get("image"),
                             "improved": p.get("improved_image"),
+                            "mode": mode_value,
+                            "original_filename": original_filename,
                             "like_count": len(liked_by),     # YENİ: Toplam beğeni
                             "liked_by": liked_by             # YENİ: Kimler beğendi (ID listesi)
                         })
@@ -354,14 +403,22 @@ async def get_user(user_id: int):
 
 @app.post("/upload/")
 async def upload_file(
-    file: UploadFile = File(...), 
-    user_id: int = Form(..., description="Yükleyen kullanıcının ID'si") # DEĞİŞEN KISIM BURASI
+    file: UploadFile = File(...),
+    user_id: int = Form(..., description="Yükleyen kullanıcının ID'si"),
+    mode: str = Form(DEFAULT_TRANSFORM_MODE, description="AI dönüşüm modu")
 ):
     """Resim yükler ve posts.json dosyasına kaydeder."""
     try:
+        mode_value = (mode or DEFAULT_TRANSFORM_MODE).strip().lower()
+        if mode_value not in TRANSFORM_MODE_PROMPTS:
+            raise HTTPException(status_code=400, detail="Geçersiz dönüşüm modu seçildi")
+
+        prompt = TRANSFORM_MODE_PROMPTS[mode_value]
+
         # 1. Dosyayı fiziksel olarak kaydet
         content = await file.read()
-        file_extension = file.filename.split(".")[-1].lower()
+        client_filename = file.filename or ""
+        file_extension = client_filename.rsplit(".", 1)[-1].lower() if "." in client_filename else "png"
         unique_filename = f"{uuid.uuid4()}.{file_extension}"
         file_path = UPLOAD_DIR / unique_filename
 
@@ -369,15 +426,18 @@ async def upload_file(
             await out_file.write(content)
 
         # 2. Görüntüyü işle (AI transformer)
-        improved_file_path = transform_image(str(file_path))
+        improved_file_path = transform_image(str(file_path), prompt)
         improved_filename = Path(improved_file_path).name
 
         # 3. JSON VERİTABANINA KAYIT (YENİ BÖLÜM)
+        original_client_filename = client_filename or unique_filename
         post_entry = {
             "user_id": user_id,
             "image": unique_filename,
             "improved_image": improved_filename,
-            "timestamp": time.time()
+            "timestamp": time.time(),
+            "mode": mode_value,
+            "original_filename": original_client_filename
         }
 
         posts_file = BASE_DIR / "posts.json"
@@ -396,9 +456,17 @@ async def upload_file(
         with open(posts_file, "w", encoding="utf-8") as f:
             json.dump(current_posts, f, indent=2)
 
+        original_url = f"/uploads/{unique_filename}"
+        improved_url = f"/uploads/{improved_filename}"
+
         return {
             "message": "Yükleme ve kayıt başarılı",
             "filename": unique_filename,
+            "original_filename": original_client_filename,
+            "improved_filename": improved_filename,
+            "original_url": original_url,
+            "improved_url": improved_url,
+            "mode": mode_value,
             "user_id": user_id
         }
 
