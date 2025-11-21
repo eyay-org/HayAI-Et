@@ -5,8 +5,8 @@
     "improved_image": "9d071f37-6669-4894-8de2-58ac5d750a73_improved.png",
     "timestamp": 1763166199.1514344,
     "liked_by": [
-      1,
-      2
+      2,
+      1
     ]
   },
   {
@@ -33,5 +33,43 @@
     "image": "d33e38db-1b43-4c7a-a1a9-6e4ed6cb8782.jpg",
     "improved_image": "d33e38db-1b43-4c7a-a1a9-6e4ed6cb8782_improved.jpg",
     "timestamp": 1763473242.113499
+  },
+  {
+    "user_id": 1,
+    "image": "7ee5b71e-18d6-4ac4-a453-2600df0b7d32.png",
+    "improved_image": "7ee5b71e-18d6-4ac4-a453-2600df0b7d32_improved.png",
+    "timestamp": 1763752250.643504
+  },
+  {
+    "user_id": 1,
+    "image": "495b507d-6daa-406f-826e-ff6e7e261aea.png",
+    "improved_image": "495b507d-6daa-406f-826e-ff6e7e261aea_improved.png",
+    "timestamp": 1763754475.2901225,
+    "mode": "cartoon",
+    "original_filename": "Ekran g\u00f6r\u00fcnt\u00fcs\u00fc 2025-11-21 221120.png"
+  },
+  {
+    "user_id": 1,
+    "image": "5f63c6c1-d260-4d00-b95e-c2e161b52d3d.png",
+    "improved_image": "5f63c6c1-d260-4d00-b95e-c2e161b52d3d_improved.png",
+    "timestamp": 1763754620.113335,
+    "mode": "anime",
+    "original_filename": "Ekran g\u00f6r\u00fcnt\u00fcs\u00fc 2025-11-21 221139.png"
+  },
+  {
+    "user_id": 1,
+    "image": "0d132349-c1f2-4991-b4de-96f407236b2a.png",
+    "improved_image": "0d132349-c1f2-4991-b4de-96f407236b2a_improved.png",
+    "timestamp": 1763754750.3992426,
+    "mode": "oil",
+    "original_filename": "Ekran g\u00f6r\u00fcnt\u00fcs\u00fc 2025-11-21 221149.png"
+  },
+  {
+    "user_id": 1,
+    "image": "dbe9cba1-4a02-4423-863e-71b46afb4c27.png",
+    "improved_image": "dbe9cba1-4a02-4423-863e-71b46afb4c27_improved.png",
+    "timestamp": 1763754828.3220234,
+    "mode": "comic",
+    "original_filename": "Ekran g\u00f6r\u00fcnt\u00fcs\u00fc 2025-11-21 221114.png"
   }
 ]
