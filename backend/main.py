@@ -76,6 +76,15 @@ TRANSFORM_MODE_PROMPTS: Dict[str, str] = {
 
 DEFAULT_TRANSFORM_MODE = TransformMode.NORMAL.value
 
+# Predefined comments that users can select from
+PREDEFINED_COMMENTS = [
+    "Harika görünüyor! 🌟",
+    "Çok yeteneklisin! 👏",
+    "Bayıldım! 😍",
+    "Kullandığın renkler müthiş! 🎨",
+    "Çizimlerin çok gerçekçi! ✨"
+]
+
 
 class UserProfile(BaseModel):
     id: int
@@ -103,6 +112,25 @@ class UserSearchResponse(BaseModel):
 class LikeRequest(BaseModel):
     filename: str # Hangi resim? (original filename kullanacağız ID olarak)
     user_id: int  # Kim beğeniyor?
+
+
+class CommentRequest(BaseModel):
+    filename: str  # Hangi resme yorum yapılıyor?
+    user_id: int   # Kim yorum yapıyor?
+    comment_text: str  # Yorum metni (set'ten seçilecek)
+
+
+class CommentResponse(BaseModel):
+    id: str  # Yorum ID'si
+    user_id: int
+    username: str
+    display_name: str = Field(..., serialization_alias="displayName")
+    avatar_name: str | None = None
+    comment_text: str
+    timestamp: float
+    
+    class Config:
+        populate_by_name = True
 
 
 # Follow relations file path (persisted under backend)
@@ -382,13 +410,18 @@ async def get_user(user_id: int):
                         mode_value = p.get("mode") or TransformMode.NORMAL.value
                         original_filename = p.get("original_filename") or p.get("image")
 
+                        # Get comments for this post
+                        comments = p.get("comments", [])
+                        
                         user_posts.append({
                             "original": p.get("image"),
                             "improved": p.get("improved_image"),
                             "mode": mode_value,
                             "original_filename": original_filename,
                             "like_count": len(liked_by),     # YENİ: Toplam beğeni
-                            "liked_by": liked_by             # YENİ: Kimler beğendi (ID listesi)
+                            "liked_by": liked_by,            # YENİ: Kimler beğendi (ID listesi)
+                            "comment_count": len(comments),  # YENİ: Toplam yorum sayısı
+                            "comments": comments             # YENİ: Yorumlar
                         })
         except Exception as e:
             print(f"Post okuma hatası: {e}")
@@ -679,6 +712,101 @@ async def toggle_like(like_data: LikeRequest):
 
     except Exception as e:
         print(f"Like hatası: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/comments/predefined")
+async def get_predefined_comments():
+    """Get the list of predefined comments users can choose from"""
+    return {"comments": PREDEFINED_COMMENTS}
+
+
+@app.post("/posts/comment", response_model=CommentResponse)
+async def add_comment(comment_data: CommentRequest):
+    """Bir gönderiye yorum ekler"""
+    posts_file = BASE_DIR / "posts.json"
+    
+    if not posts_file.exists():
+        raise HTTPException(status_code=404, detail="Post veritabanı bulunamadı")
+    
+    # Validate comment text is from predefined list
+    if comment_data.comment_text not in PREDEFINED_COMMENTS:
+        raise HTTPException(status_code=400, detail="Geçersiz yorum. Lütfen listeden bir yorum seçin.")
+    
+    # Get user info
+    user = next((u for u in FAKE_USERS if u.id == comment_data.user_id), None)
+    if not user:
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
+    
+    try:
+        # 1. Dosyayı Oku
+        with open(posts_file, "r", encoding="utf-8") as f:
+            all_posts = json.load(f)
+        
+        post_found = False
+        new_comment = None
+
+        # 2. İlgili postu bul ve yorumu ekle
+        for post in all_posts:
+            if post.get("image") == comment_data.filename:
+                post_found = True
+                
+                # 'comments' listesi yoksa oluştur
+                if "comments" not in post:
+                    post["comments"] = []
+                
+                # Yeni yorum oluştur
+                import uuid
+                new_comment = {
+                    "id": str(uuid.uuid4()),
+                    "user_id": comment_data.user_id,
+                    "username": user.username,
+                    "display_name": user.display_name,
+                    "avatar_name": user.avatar_name,
+                    "comment_text": comment_data.comment_text,
+                    "timestamp": time.time()
+                }
+                
+                post["comments"].append(new_comment)
+                break
+        
+        if not post_found:
+            raise HTTPException(status_code=404, detail="Gönderi bulunamadı")
+
+        # 3. Dosyayı Kaydet
+        with open(posts_file, "w", encoding="utf-8") as f:
+            json.dump(all_posts, f, indent=2, ensure_ascii=False)
+            
+        return CommentResponse(**new_comment)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Yorum hatası: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/posts/{filename}/comments", response_model=List[CommentResponse])
+async def get_post_comments(filename: str):
+    """Bir gönderinin yorumlarını getirir"""
+    posts_file = BASE_DIR / "posts.json"
+    
+    if not posts_file.exists():
+        return []
+    
+    try:
+        with open(posts_file, "r", encoding="utf-8") as f:
+            all_posts = json.load(f)
+        
+        for post in all_posts:
+            if post.get("image") == filename:
+                comments = post.get("comments", [])
+                return [CommentResponse(**c) for c in comments]
+        
+        return []
+
+    except Exception as e:
+        print(f"Yorum getirme hatası: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
