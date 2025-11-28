@@ -1830,7 +1830,7 @@
 /* Modern Photo Gallery Styles */
 .photo-gallery {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 20px;
   padding: 20px 0;
 }
@@ -2121,7 +2121,7 @@
   }
   
   .photo-gallery {
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
     gap: 15px;
   }
   
@@ -2269,7 +2269,7 @@
   }
   
   .photo-gallery {
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    grid-template-columns: 1fr;
     gap: 15px;
   }
   
@@ -2540,4 +2540,204 @@
 .like-icon {
   font-size: 1.1rem;
   line-height: 1;
+}
+
+/* Comment Button Styles */
+.comment-button {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e1e1e1;
+  border-radius: 20px;
+  padding: 4px 10px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  margin-left: 8px;
+}
+
+.comment-button:hover {
+  background: #fff;
+  transform: scale(1.05);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.comment-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.comment-count {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.view-comments-button {
+  background: rgba(116, 192, 252, 0.15);
+  border: 1px solid var(--color-secondary);
+  border-radius: 20px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  margin-left: 8px;
+}
+
+.view-comments-button:hover {
+  background: rgba(116, 192, 252, 0.25);
+  transform: scale(1.05);
+}
+
+/* Comment Modal Styles */
+.comment-modal-content {
+  background: white;
+  border-radius: 20px;
+  padding: 30px;
+  width: min(500px, 90%);
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  position: relative;
+}
+
+.comment-modal-content h3 {
+  margin: 0 0 10px 0;
+  color: var(--color-primary);
+  font-size: 1.8em;
+}
+
+.comment-modal-subtitle {
+  color: var(--color-muted);
+  margin: 0 0 20px 0;
+  font-size: 0.95em;
+}
+
+.predefined-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.comment-option {
+  padding: 16px 20px;
+  border: 2px solid var(--color-border);
+  border-radius: 12px;
+  background: white;
+  color: var(--color-text);
+  font-size: 1em;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: left;
+  display: flex;
+  align-items: center;
+}
+
+.comment-option:hover {
+  border-color: var(--color-secondary);
+  background: rgba(116, 192, 252, 0.08);
+  transform: translateX(5px);
+  box-shadow: 0 4px 12px rgba(116, 192, 252, 0.2);
+}
+
+/* Comments View Modal */
+.comments-view-modal-content {
+  background: white;
+  border-radius: 20px;
+  padding: 30px;
+  width: min(600px, 90%);
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  position: relative;
+}
+
+.comments-view-modal-content h3 {
+  margin: 0 0 10px 0;
+  color: var(--color-primary);
+  font-size: 1.8em;
+}
+
+.comments-view-subtitle {
+  color: var(--color-muted);
+  margin: 0 0 24px 0;
+  font-size: 0.95em;
+}
+
+.comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.no-comments {
+  text-align: center;
+  color: var(--color-muted);
+  padding: 40px 20px;
+  font-style: italic;
+}
+
+.comment-item {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+}
+
+.comment-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.comment-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--color-border);
+}
+
+.comment-avatar-placeholder {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-secondary), var(--color-creative));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 1.2em;
+  border: 2px solid var(--color-border);
+}
+
+.comment-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.comment-display-name {
+  font-weight: 700;
+  color: var(--color-text);
+  font-size: 0.95em;
+}
+
+.comment-username {
+  color: var(--color-muted);
+  font-size: 0.85em;
+}
+
+.comment-text {
+  margin: 0 0 8px 0;
+  color: var(--color-text);
+  font-size: 1em;
+  line-height: 1.5;
+}
+
+.comment-time {
+  color: var(--color-muted);
+  font-size: 0.8em;
 }

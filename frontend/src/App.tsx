@@ -83,6 +83,16 @@ interface UploadResponse {
   user_id: number;
 }
 
+interface Comment {
+  id: string;
+  user_id: number;
+  username: string;
+  displayName: string;
+  avatar_name?: string | null;
+  comment_text: string;
+  timestamp: number;
+}
+
 interface GalleryItem {
   id: string;
   original: string;
@@ -95,6 +105,8 @@ interface GalleryItem {
   likeCount: number;
   isLiked: boolean;
   mode?: TransformMode;
+  commentCount: number;
+  comments: Comment[];
 }
 
 interface UserProfile {
@@ -111,6 +123,8 @@ interface UserProfile {
     liked_by: number[];
     mode?: TransformMode;
     original_filename?: string;
+    comment_count: number;
+    comments: Comment[];
   }>;
 }
 
@@ -186,6 +200,11 @@ function App() {
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const searchAbortController = React.useRef<AbortController | null>(null);
   const searchDelayRef = React.useRef<number | undefined>(undefined);
+  // Comment modal state
+  const [commentModalOpen, setCommentModalOpen] = useState(false);
+  const [commentingItem, setCommentingItem] = useState<GalleryItem | null>(null);
+  const [predefinedComments, setPredefinedComments] = useState<string[]>([]);
+  const [viewingComments, setViewingComments] = useState<{item: GalleryItem, comments: Comment[]} | null>(null);
 
   const selectedModeMeta = MODE_LOOKUP[selectedMode] ?? MODE_OPTIONS[0];
 
@@ -385,6 +404,8 @@ function App() {
           likeCount: post.like_count || 0,
           isLiked: currentUserId ? (post.liked_by || []).includes(currentUserId) : false,
           mode: post.mode,
+          commentCount: post.comment_count || 0,
+          comments: post.comments || [],
         }));
 
         setGallery(backendGallery);
@@ -658,6 +679,8 @@ function App() {
         likeCount: 0,     // Yeni resmin beğenisi 0 başlar
         isLiked: false,   // Henüz kimse beğenmediği için false
         mode: response.data.mode,
+        commentCount: 0,  // Yeni resmin yorumu 0 başlar
+        comments: [],     // Henüz yorum yok
         
         // (Opsiyonel) Başlık ve emoji varsayılanları da eklenebilir:
         title: "Çizim",
@@ -799,6 +822,85 @@ function App() {
       type: "success",
       text: `✅ "${editingItem.filename}" güncellendi!`,
     });
+  };
+
+  // Load predefined comments on mount
+  React.useEffect(() => {
+    const loadPredefinedComments = async () => {
+      try {
+        const response = await axios.get<{ comments: string[] }>('http://localhost:8000/comments/predefined');
+        setPredefinedComments(response.data.comments);
+      } catch (error) {
+        console.error('Error loading predefined comments:', error);
+        // Fallback to default comments
+        setPredefinedComments([
+          "Harika görünüyor! 🌟",
+          "Çok yeteneklisin! 👏",
+          "Bayıldım! 😍",
+          "Kullandığın renkler müthiş! 🎨",
+          "Çizimlerin çok gerçekçi! ✨"
+        ]);
+      }
+    };
+    loadPredefinedComments();
+  }, []);
+
+  const openCommentModal = (item: GalleryItem) => {
+    setCommentingItem(item);
+    setCommentModalOpen(true);
+  };
+
+  const closeCommentModal = () => {
+    setCommentModalOpen(false);
+    setCommentingItem(null);
+  };
+
+  const handleAddComment = async (commentText: string) => {
+    const currentUserId = getCurrentUserId();
+    if (!currentUserId || !commentingItem) {
+      setMessage({ type: "error", text: "Yorum yapmak için giriş yapmalısınız!" });
+      return;
+    }
+
+    try {
+      const response = await axios.post<Comment>('http://localhost:8000/posts/comment', {
+        filename: commentingItem.originalFilename,
+        user_id: currentUserId,
+        comment_text: commentText
+      });
+
+      // Update gallery with new comment
+      setGallery(prev => prev.map(item => {
+        if (item.id === commentingItem.id) {
+          return {
+            ...item,
+            commentCount: item.commentCount + 1,
+            comments: [...item.comments, response.data]
+          };
+        }
+        return item;
+      }));
+
+      closeCommentModal();
+      setMessage({
+        type: "success",
+        text: "✅ Yorumunuz eklendi!",
+      });
+    } catch (error: any) {
+      console.error('Comment error:', error);
+      setMessage({
+        type: "error",
+        text: `❌ Yorum eklenirken hata oluştu: ${error.response?.data?.detail || error.message}`,
+      });
+    }
+  };
+
+  const openViewComments = (item: GalleryItem) => {
+    setViewingComments({ item, comments: item.comments });
+  };
+
+  const closeViewComments = () => {
+    setViewingComments(null);
   };
 
   const handleSearchInput = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1399,6 +1501,29 @@ const handleViewProfile = (user: UserProfile) => {
                                 <span className="like-icon">{item.isLiked ? '❤️' : '🤍'}</span>
                                 <span className="like-count">{item.likeCount}</span>
                                </button>
+                               <button 
+                                className="comment-button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openCommentModal(item);
+                                }}
+                                title="Yorum yap"
+                               >
+                                <span className="comment-icon">💬</span>
+                                <span className="comment-count">{item.commentCount}</span>
+                               </button>
+                               {item.commentCount > 0 && (
+                                 <button 
+                                   className="view-comments-button"
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     openViewComments(item);
+                                   }}
+                                   title="Yorumları gör"
+                                 >
+                                   👁️
+                                 </button>
+                               )}
                                 {!viewingProfile && (
                                   <div className="photo-actions">
                                     <button
@@ -1751,6 +1876,84 @@ const handleViewProfile = (user: UserProfile) => {
                     Kaydet
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Comment Selection Modal */}
+        {commentModalOpen && commentingItem && (
+          <div className="modal-overlay" onClick={closeCommentModal}>
+            <div className="comment-modal-content" onClick={(e) => e.stopPropagation()}>
+              <button className="modal-close" onClick={closeCommentModal}>
+                ✕
+              </button>
+              <h3>Yorum Yap</h3>
+              <p className="comment-modal-subtitle">Aşağıdaki yorumlardan birini seçin:</p>
+              <div className="predefined-comments">
+                {predefinedComments.map((comment, index) => (
+                  <button
+                    key={index}
+                    className="comment-option"
+                    onClick={() => handleAddComment(comment)}
+                  >
+                    {comment}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* View Comments Modal */}
+        {viewingComments && (
+          <div className="modal-overlay" onClick={closeViewComments}>
+            <div className="comments-view-modal-content" onClick={(e) => e.stopPropagation()}>
+              <button className="modal-close" onClick={closeViewComments}>
+                ✕
+              </button>
+              <h3>Yorumlar</h3>
+              <p className="comments-view-subtitle">
+                {viewingComments.item.filename} için {viewingComments.comments.length} yorum
+              </p>
+              <div className="comments-list">
+                {viewingComments.comments.length === 0 ? (
+                  <p className="no-comments">Henüz yorum yok.</p>
+                ) : (
+                  viewingComments.comments.map((comment) => (
+                    <div key={comment.id} className="comment-item">
+                      <div className="comment-header">
+                        {comment.avatar_name ? (
+                          <img 
+                            src={`http://localhost:8000/avatars/${comment.avatar_name}`} 
+                            alt={comment.displayName}
+                            className="comment-avatar"
+                          />
+                        ) : (
+                          <div className="comment-avatar-placeholder">
+                            {comment.displayName && typeof comment.displayName === 'string' 
+                              ? comment.displayName.charAt(0).toUpperCase() 
+                              : '?'}
+                          </div>
+                        )}
+                        <div className="comment-user-info">
+                          <span className="comment-display-name">{comment.displayName}</span>
+                          <span className="comment-username">@{comment.username}</span>
+                        </div>
+                      </div>
+                      <p className="comment-text">{comment.comment_text}</p>
+                      <span className="comment-time">
+                        {new Date(comment.timestamp * 1000).toLocaleDateString('tr-TR', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>

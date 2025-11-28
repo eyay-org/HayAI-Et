@@ -25,14 +25,18 @@
     "improved_image": "a96de93a-3abc-4db6-a64b-564d1cfb581c_improved.jpg",
     "timestamp": 1763473065.680001,
     "liked_by": [
-      2
+      2,
+      1
     ]
   },
   {
     "user_id": 2,
     "image": "d33e38db-1b43-4c7a-a1a9-6e4ed6cb8782.jpg",
     "improved_image": "d33e38db-1b43-4c7a-a1a9-6e4ed6cb8782_improved.jpg",
-    "timestamp": 1763473242.113499
+    "timestamp": 1763473242.113499,
+    "liked_by": [
+      1
+    ]
   },
   {
     "user_id": 1,
@@ -71,5 +75,37 @@
     "timestamp": 1763754828.3220234,
     "mode": "comic",
     "original_filename": "Ekran g\u00f6r\u00fcnt\u00fcs\u00fc 2025-11-21 221114.png"
+  },
+  {
+    "user_id": 2,
+    "image": "91da7f89-98e5-46ff-b689-753fb9db5415.png",
+    "improved_image": "91da7f89-98e5-46ff-b689-753fb9db5415_improved.png",
+    "timestamp": 1764322618.8071697,
+    "mode": "oil",
+    "original_filename": "Ekran g\u00f6r\u00fcnt\u00fcs\u00fc 2025-11-21 221114.png",
+    "liked_by": [
+      1,
+      2
+    ],
+    "comments": [
+      {
+        "id": "c7e2f3ea-89b1-4ac2-89e2-05294d9b6ea6",
+        "user_id": 1,
+        "username": "hayai",
+        "display_name": "HayAI Kullan\u0131c\u0131s\u0131",
+        "avatar_name": null,
+        "comment_text": "\u00c7ok yeteneklisin! \ud83d\udc4f",
+        "timestamp": 1764323607.1096692
+      },
+      {
+        "id": "a0c84258-a02a-4ee8-ad9a-99d0c0bce9e0",
+        "user_id": 2,
+        "username": "guest",
+        "display_name": "Misafir Kullan\u0131c\u0131",
+        "avatar_name": "avatar-7.jpg",
+        "comment_text": "Harika g\u00f6r\u00fcn\u00fcyor! \ud83c\udf1f",
+        "timestamp": 1764324027.7639706
+      }
+    ]
   }
 ]
