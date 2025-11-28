@@ -71,6 +71,7 @@
   font-size: 1em;
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
   box-sizing: border-box;
+  font-family: inherit;
 }
 
 .login-input::placeholder {
@@ -81,6 +82,11 @@
   outline: none;
   border-color: var(--color-secondary);
   box-shadow: 0 0 0 4px rgba(116, 192, 252, 0.2);
+}
+
+textarea.login-input {
+  min-height: 80px;
+  resize: vertical;
 }
 
 .login-button {
@@ -124,6 +130,209 @@
 
 .login-hint strong {
   color: var(--color-primary);
+}
+
+/* Login Divider */
+.login-divider {
+  display: flex;
+  align-items: center;
+  margin: 20px 0;
+  color: var(--color-muted);
+  font-size: 0.9em;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.login-divider span {
+  padding: 0 15px;
+}
+
+/* Register Button */
+.register-button {
+  padding: 14px 22px;
+  width: 100%;
+  box-sizing: border-box;
+  border: 2px solid var(--color-secondary);
+  border-radius: 14px;
+  background: white;
+  color: var(--color-secondary);
+  font-weight: 600;
+  font-size: 1em;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.register-button:hover {
+  background: var(--color-secondary);
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(116, 192, 252, 0.3);
+}
+
+/* Register Card */
+.register-card {
+  width: min(580px, 100%);
+  background: linear-gradient(135deg, rgba(200, 182, 255, 0.25), #ffffff);
+  border-radius: 22px;
+  padding: 40px 40px;
+  box-shadow: 0 18px 42px rgba(116, 192, 252, 0.15);
+  border: 1px solid var(--color-border);
+  text-align: center;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.register-card h1 {
+  margin: 0 0 10px 0;
+  font-size: 2.1em;
+  color: var(--color-primary);
+}
+
+/* Checkbox Group */
+.checkbox-group {
+  margin: 16px 0;
+  text-align: left;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 0.95em;
+  color: var(--color-text);
+  line-height: 1.5;
+}
+
+.checkbox-input {
+  margin-top: 3px;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--color-secondary);
+}
+
+.checkbox-label:hover {
+  color: var(--color-primary);
+}
+
+/* Terms Link */
+.terms-link {
+  background: none;
+  border: none;
+  color: var(--color-secondary);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+  padding: 0;
+  font-weight: 600;
+}
+
+.terms-link:hover {
+  color: var(--color-primary);
+}
+
+/* Back to Login Button */
+.back-to-login-button {
+  background: none;
+  border: none;
+  color: var(--color-secondary);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+  padding: 0;
+  font-weight: 600;
+}
+
+.back-to-login-button:hover {
+  color: var(--color-primary);
+}
+
+/* Beyanname Modal */
+.beyanname-modal-content {
+  background: white;
+  border-radius: 20px;
+  padding: 35px;
+  width: min(700px, 90%);
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+.beyanname-modal-content h2 {
+  margin: 0 0 20px 0;
+  color: var(--color-primary);
+  font-size: 1.6em;
+}
+
+.beyanname-text {
+  text-align: left;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  border: 1px solid var(--color-border);
+}
+
+.beyanname-text p {
+  margin: 0 0 12px 0;
+  line-height: 1.6;
+  color: var(--color-text);
+  font-size: 0.95em;
+}
+
+.beyanname-text p:empty {
+  margin: 0;
+}
+
+.beyanname-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.beyanname-accept-button {
+  padding: 14px 24px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--color-support) 0%, #6fcf97 100%);
+  color: white;
+  font-weight: 700;
+  font-size: 1em;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 6px 16px rgba(140, 228, 154, 0.3);
+}
+
+.beyanname-accept-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(140, 228, 154, 0.4);
+}
+
+.beyanname-close-button {
+  padding: 14px 24px;
+  border: 2px solid var(--color-border);
+  border-radius: 12px;
+  background: white;
+  color: var(--color-text);
+  font-weight: 600;
+  font-size: 1em;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.beyanname-close-button:hover {
+  background: var(--color-neutral);
+  border-color: var(--color-muted);
 }
 
 .container {

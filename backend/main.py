@@ -6,7 +6,9 @@ from pathlib import Path
 import uuid
 import time
 import gc
-from typing import List, Dict, Set, Any
+import hashlib
+from datetime import datetime
+from typing import List, Dict, Set, Any, Optional
 from enum import Enum
 from pydantic import BaseModel, Field
 from services.image_transformer import transform_image
@@ -133,6 +135,44 @@ class CommentResponse(BaseModel):
         populate_by_name = True
 
 
+class UserAuth(BaseModel):
+    """User authentication data stored in users_auth.json"""
+    id: int
+    username: str
+    email: str
+    password_hash: str
+    created_at: str
+    terms_accepted: bool
+    terms_accepted_at: str | None = None
+    age_verified: bool
+
+
+class RegisterRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+    display_name: str
+    bio: Optional[str] = "HayAI Art Platform'unda çizimlerimi paylaşıyorum! 🎨"
+    age_verified: bool
+    terms_accepted: bool
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    success: bool
+    user_id: int
+    username: str
+    display_name: str = Field(..., serialization_alias="displayName")
+    message: str
+    
+    class Config:
+        populate_by_name = True
+
+
 # Follow relations file path (persisted under backend)
 FOLLOW_RELATIONS_FILE = BASE_DIR / "follow_relations.json"
 
@@ -168,6 +208,76 @@ def save_follow_relations():
 
 # Load follow relations on startup
 load_follow_relations()
+
+# Users authentication file path
+USERS_AUTH_FILE = BASE_DIR / "users_auth.json"
+
+# In-memory users authentication data
+USERS_AUTH: Dict[int, UserAuth] = {}
+
+def hash_password(password: str) -> str:
+    """Hash password using SHA256"""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def verify_password(password: str, password_hash: str) -> bool:
+    """Verify password against hash"""
+    return hash_password(password) == password_hash
+
+def load_users_auth():
+    """Load users authentication data from JSON file"""
+    global USERS_AUTH
+    if USERS_AUTH_FILE.exists():
+        try:
+            with open(USERS_AUTH_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                USERS_AUTH = {int(item['id']): UserAuth(**item) for item in data}
+        except Exception as e:
+            print(f"Error loading users auth: {e}")
+            USERS_AUTH = {}
+    else:
+        # Create default users (hayai and guest with default passwords)
+        default_users = [
+            UserAuth(
+                id=1,
+                username="hayai",
+                email="hayai@example.com",
+                password_hash=hash_password("hayai123"),
+                created_at=datetime.now().isoformat(),
+                terms_accepted=True,
+                terms_accepted_at=datetime.now().isoformat(),
+                age_verified=True
+            ),
+            UserAuth(
+                id=2,
+                username="guest",
+                email="guest@example.com",
+                password_hash=hash_password("guest123"),
+                created_at=datetime.now().isoformat(),
+                terms_accepted=True,
+                terms_accepted_at=datetime.now().isoformat(),
+                age_verified=True
+            )
+        ]
+        USERS_AUTH = {user.id: user for user in default_users}
+        save_users_auth()
+
+def save_users_auth():
+    """Save users authentication data to JSON file"""
+    try:
+        data = [user.dict() for user in USERS_AUTH.values()]
+        with open(USERS_AUTH_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Error saving users auth: {e}")
+
+def get_next_user_id() -> int:
+    """Get next available user ID"""
+    max_auth_id = max(USERS_AUTH.keys()) if USERS_AUTH else 0
+    max_profile_id = max((u.id for u in FAKE_USERS), default=0) if FAKE_USERS else 0
+    return max(max_auth_id, max_profile_id) + 1
+
+# Load users auth on startup
+load_users_auth()
 
 # User profiles persistence
 USER_PROFILES_FILE = BASE_DIR / "user_profiles.json"
@@ -317,6 +427,108 @@ load_user_profiles()
 async def root():
     """API root endpoint"""
     return {"message": "HayAI Art Platform API", "version": "1.0.0"}
+
+
+@app.post("/register", response_model=LoginResponse)
+async def register_user(register_data: RegisterRequest):
+    """Register a new user"""
+    # Validate email format (basic check)
+    if '@' not in register_data.email or '.' not in register_data.email.split('@')[-1]:
+        raise HTTPException(status_code=400, detail="Geçerli bir e-posta adresi girin")
+    
+    # Validate age verification
+    if not register_data.age_verified:
+        raise HTTPException(status_code=400, detail="Yaş doğrulaması gereklidir (18+)")
+    
+    # Validate terms acceptance
+    if not register_data.terms_accepted:
+        raise HTTPException(status_code=400, detail="Kullanım koşullarını kabul etmelisiniz")
+    
+    # Check if username already exists
+    if any(user.username.lower() == register_data.username.lower() for user in USERS_AUTH.values()):
+        raise HTTPException(status_code=400, detail="Bu kullanıcı adı zaten kullanılıyor")
+    
+    # Check if email already exists
+    if any(user.email.lower() == register_data.email.lower() for user in USERS_AUTH.values()):
+        raise HTTPException(status_code=400, detail="Bu e-posta adresi zaten kayıtlı")
+    
+    # Validate username (alphanumeric and underscore only, 3-20 chars)
+    if not register_data.username.replace('_', '').isalnum() or len(register_data.username) < 3 or len(register_data.username) > 20:
+        raise HTTPException(status_code=400, detail="Kullanıcı adı 3-20 karakter olmalı ve sadece harf, rakam ve alt çizgi içerebilir")
+    
+    # Validate password strength (minimum 6 characters)
+    if len(register_data.password) < 6:
+        raise HTTPException(status_code=400, detail="Şifre en az 6 karakter olmalıdır")
+    
+    # Create new user ID
+    new_user_id = get_next_user_id()
+    current_time = datetime.now().isoformat()
+    
+    # Create authentication record
+    new_auth = UserAuth(
+        id=new_user_id,
+        username=register_data.username,
+        email=register_data.email,
+        password_hash=hash_password(register_data.password),
+        created_at=current_time,
+        terms_accepted=register_data.terms_accepted,
+        terms_accepted_at=current_time,
+        age_verified=register_data.age_verified
+    )
+    
+    # Create user profile
+    new_profile = UserProfile(
+        id=new_user_id,
+        username=register_data.username,
+        display_name=register_data.display_name,
+        bio=register_data.bio or "HayAI Art Platform'unda çizimlerimi paylaşıyorum! 🎨",
+        interests=[],
+        avatar_name=None,
+        posts=[]
+    )
+    
+    # Save to memory and files
+    USERS_AUTH[new_user_id] = new_auth
+    FAKE_USERS.append(new_profile)
+    
+    save_users_auth()
+    save_user_profiles()
+    
+    return LoginResponse(
+        success=True,
+        user_id=new_user_id,
+        username=register_data.username,
+        display_name=register_data.display_name,
+        message="Kayıt başarılı! Hoş geldiniz!"
+    )
+
+
+@app.post("/login", response_model=LoginResponse)
+async def login_user(login_data: LoginRequest):
+    """Login user with username and password"""
+    # Find user by username
+    user_auth = next((user for user in USERS_AUTH.values() if user.username.lower() == login_data.username.lower()), None)
+    
+    if not user_auth:
+        raise HTTPException(status_code=401, detail="Kullanıcı adı veya şifre hatalı")
+    
+    # Verify password
+    if not verify_password(login_data.password, user_auth.password_hash):
+        raise HTTPException(status_code=401, detail="Kullanıcı adı veya şifre hatalı")
+    
+    # Get user profile
+    user_profile = next((user for user in FAKE_USERS if user.id == user_auth.id), None)
+    
+    if not user_profile:
+        raise HTTPException(status_code=404, detail="Kullanıcı profili bulunamadı")
+    
+    return LoginResponse(
+        success=True,
+        user_id=user_auth.id,
+        username=user_auth.username,
+        display_name=user_profile.display_name,
+        message="Giriş başarılı!"
+    )
 
 
 @app.get("/users/search", response_model=UserSearchResponse)

@@ -9,7 +9,8 @@
       "sanat",
       "çizim"
     ],
-    "avatar_name": null
+    "avatar_name": null,
+    "posts": []
   },
   {
     "id": 2,
@@ -20,7 +21,8 @@
       "sanat",
       "çizim"
     ],
-    "avatar_name": "avatar-7.jpg"
+    "avatar_name": "avatar-7.jpg",
+    "posts": []
   },
   {
     "id": 3,
@@ -32,7 +34,8 @@
       "çocuk kitapları",
       "pastel"
     ],
-    "avatar_name": null
+    "avatar_name": null,
+    "posts": []
   },
   {
     "id": 4,
@@ -44,7 +47,8 @@
       "piksel",
       "retro"
     ],
-    "avatar_name": null
+    "avatar_name": null,
+    "posts": []
   },
   {
     "id": 5,
@@ -56,7 +60,8 @@
       "poster",
       "renkli"
     ],
-    "avatar_name": null
+    "avatar_name": null,
+    "posts": []
   },
   {
     "id": 6,
@@ -68,7 +73,8 @@
       "deneysel",
       "dijital"
     ],
-    "avatar_name": null
+    "avatar_name": null,
+    "posts": []
   },
   {
     "id": 7,
@@ -80,7 +86,8 @@
       "suluboya",
       "doğa"
     ],
-    "avatar_name": null
+    "avatar_name": null,
+    "posts": []
   },
   {
     "id": 8,
@@ -92,7 +99,8 @@
       "karakter",
       "hikaye"
     ],
-    "avatar_name": null
+    "avatar_name": null,
+    "posts": []
   },
   {
     "id": 9,
@@ -104,7 +112,8 @@
       "neon",
       "fantastik"
     ],
-    "avatar_name": null
+    "avatar_name": null,
+    "posts": []
   },
   {
     "id": 10,
@@ -116,6 +125,16 @@
       "desen",
       "dijitalleşme"
     ],
-    "avatar_name": null
+    "avatar_name": null,
+    "posts": []
+  },
+  {
+    "id": 11,
+    "username": "esra",
+    "display_name": "ess",
+    "bio": "Resim çizmeye bayılıyorum!!",
+    "interests": [],
+    "avatar_name": null,
+    "posts": []
   }
 ]
