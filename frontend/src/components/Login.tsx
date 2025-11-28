@@ -1,6 +1,9 @@
 import React, { useState } from "react";
 import axios from "axios";
 
+// API URL - uses environment variable in production, localhost in development
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
+
 interface LoginProps {
   onSuccess: (username: string) => void;
   onRegisterClick: () => void;
@@ -18,7 +21,7 @@ const Login: React.FC<LoginProps> = ({ onSuccess, onRegisterClick }) => {
     setLoading(true);
 
     try {
-      const response = await axios.post("http://localhost:8000/login", {
+      const response = await axios.post(`${API_URL}/login`, {
         username: username.trim(),
         password: password,
       });

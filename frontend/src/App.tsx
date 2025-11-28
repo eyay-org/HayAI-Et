@@ -4,6 +4,9 @@ import "./App.css";
 import Login from "./components/Login";
 import Register from "./components/Register";
 
+// API URL - uses environment variable in production, localhost in development
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
+
 type TransformMode =
   | "normal"
   | "oil"
@@ -247,11 +250,11 @@ function App() {
     if (!currentUserId) return null;
     try {
       // Fetch user profile to get avatar name
-      const response = await axios.get(`http://localhost:8000/users/${currentUserId}`);
+      const response = await axios.get(`${API_URL}/users/${currentUserId}`);
       const avatarName = response.data.avatar_name;
       if (avatarName) {
         setUserAvatarName(avatarName);
-        return `http://localhost:8000/avatars/${avatarName}`;
+        return `${API_URL}/avatars/${avatarName}`;
       }
       setUserAvatarName(null);
       return null;
@@ -275,7 +278,7 @@ function App() {
   React.useEffect(() => {
     const loadAvatars = async () => {
       try {
-        const response = await axios.get<AvatarInfo[]>('http://localhost:8000/avatars');
+        const response = await axios.get<AvatarInfo[]>(`${API_URL}/avatars`);
         setAvailableAvatars(response.data);
       } catch (error) {
         console.error('Error loading avatars:', error);
@@ -306,11 +309,11 @@ function App() {
     }
 
     try {
-      await axios.put(`http://localhost:8000/users/${currentUserId}/avatar`, null, {
+      await axios.put(`${API_URL}/users/${currentUserId}/avatar`, null, {
         params: { avatar_name: avatarName }
       });
       setUserAvatarName(avatarName);
-      setUserAvatar(`http://localhost:8000/avatars/${avatarName}`);
+      setUserAvatar(`${API_URL}/avatars/${avatarName}`);
       setAvatarModalOpen(false);
       setMessage({
         type: "success",
@@ -329,7 +332,7 @@ function App() {
   React.useEffect(() => {
     if (viewingProfile) {
       // Fetch follow stats
-      axios.get(`http://localhost:8000/users/${viewingProfile.id}/follow-stats`)
+      axios.get(`${API_URL}/users/${viewingProfile.id}/follow-stats`)
         .then(response => {
           setViewingProfileStats(response.data);
         })
@@ -341,7 +344,7 @@ function App() {
       // Check if current user is following this profile
       const currentUserId = getCurrentUserId();
       if (currentUserId) {
-        axios.get(`http://localhost:8000/users/${currentUserId}/is-following/${viewingProfile.id}`)
+        axios.get(`${API_URL}/users/${currentUserId}/is-following/${viewingProfile.id}`)
           .then(response => {
             setIsFollowing(response.data.is_following);
           })
@@ -361,7 +364,7 @@ function App() {
     if (!viewingProfile && currentUser) {
       const currentUserId = getCurrentUserId();
       if (currentUserId) {
-        axios.get(`http://localhost:8000/users/${currentUserId}/follow-stats`)
+        axios.get(`${API_URL}/users/${currentUserId}/follow-stats`)
           .then(response => {
             setUserFollowers(response.data.followers);
             setUserFollowing(response.data.following);
@@ -393,7 +396,7 @@ function App() {
 
       try {
         // Kullanıcı bilgilerini (ve postlarını) çek
-        const response = await axios.get<UserProfile>(`http://localhost:8000/users/${targetUserId}`);
+        const response = await axios.get<UserProfile>(`${API_URL}/users/${targetUserId}`);
         // Backend'den gelen veriyi işle
         const userPosts = response.data.posts || [];
 
@@ -401,8 +404,8 @@ function App() {
 
         const backendGallery: GalleryItem[] = userPosts.map((post, index) => ({
           id: `backend_${index}_${post.original}`,
-          original: `http://localhost:8000/uploads/${post.original}`, 
-          improved: `http://localhost:8000/uploads/${post.improved}`,
+          original: `${API_URL}/uploads/${post.original}`, 
+          improved: `${API_URL}/uploads/${post.improved}`,
           filename: post.original_filename || "AI Çizimi",
           originalFilename: post.original,
           timestamp: Date.now(),
@@ -488,7 +491,7 @@ function App() {
     searchDelayRef.current = window.setTimeout(async () => {
       try {
         const response = await axios.get<SearchApiResponse>(
-          "http://localhost:8000/users/search",
+          `${API_URL}/users/search`,
           {
             params: { q: trimmedQuery },
             signal: controller.signal,
@@ -596,7 +599,7 @@ function App() {
 
     try {
       // 2. Backend'e isteği gönder
-      await axios.post("http://localhost:8000/posts/like", {
+      await axios.post(`${API_URL}/posts/like`, {
         filename: item.originalFilename, // ID olarak orijinal dosya adını kullanıyoruz
         user_id: currentUserId
       });
@@ -656,7 +659,7 @@ function App() {
 
     try {
       const response = await axios.post<UploadResponse>(
-        "http://localhost:8000/upload/",
+        `${API_URL}/upload/`,
         formData,
         {
           headers: {
@@ -672,8 +675,8 @@ function App() {
 
       // Set uploaded images for display
       const newImages = {
-        original: `http://localhost:8000${response.data.original_url}`,
-        improved: `http://localhost:8000${response.data.improved_url}`,
+        original: `${API_URL}${response.data.original_url}`,
+        improved: `${API_URL}${response.data.improved_url}`,
         filename: response.data.original_filename,
         mode: response.data.mode,
       };
@@ -753,7 +756,7 @@ function App() {
     try {
       // Only call backend if we have the originalFilename
       if (item.originalFilename) {
-        await axios.delete(`http://localhost:8000/delete/${item.originalFilename}`);
+        await axios.delete(`${API_URL}/delete/${item.originalFilename}`);
       }
       
       // Remove from gallery (always remove from frontend)
@@ -781,7 +784,7 @@ function App() {
       // Delete files from backend (only for items that have originalFilename)
       const itemsWithFilename = gallery.filter(item => item.originalFilename);
       const deletePromises = itemsWithFilename.map(item => 
-        axios.delete(`http://localhost:8000/delete/${item.originalFilename}`)
+        axios.delete(`${API_URL}/delete/${item.originalFilename}`)
       );
       
       if (deletePromises.length > 0) {
@@ -841,7 +844,7 @@ function App() {
   React.useEffect(() => {
     const loadPredefinedComments = async () => {
       try {
-        const response = await axios.get<{ comments: string[] }>('http://localhost:8000/comments/predefined');
+        const response = await axios.get<{ comments: string[] }>(`${API_URL}/comments/predefined`);
         setPredefinedComments(response.data.comments);
       } catch (error) {
         console.error('Error loading predefined comments:', error);
@@ -876,7 +879,7 @@ function App() {
     }
 
     try {
-      const response = await axios.post<Comment>('http://localhost:8000/posts/comment', {
+      const response = await axios.post<Comment>(`${API_URL}/posts/comment`, {
         filename: commentingItem.originalFilename,
         user_id: currentUserId,
         comment_text: commentText
@@ -957,7 +960,7 @@ const handleViewProfile = (user: UserProfile) => {
         return;
       }
       
-      await axios.post(`http://localhost:8000/users/${targetUserId}/follow`, null, {
+      await axios.post(`${API_URL}/users/${targetUserId}/follow`, null, {
         params: { current_user_id: currentUserId }
       });
       setIsFollowing(true);
@@ -967,7 +970,7 @@ const handleViewProfile = (user: UserProfile) => {
       });
       // Refresh stats
       if (viewingProfile) {
-        const response = await axios.get(`http://localhost:8000/users/${viewingProfile.id}/follow-stats`);
+        const response = await axios.get(`${API_URL}/users/${viewingProfile.id}/follow-stats`);
         setViewingProfileStats(response.data);
       }
     } catch (error: any) {
@@ -990,7 +993,7 @@ const handleViewProfile = (user: UserProfile) => {
         return;
       }
       
-      await axios.delete(`http://localhost:8000/users/${targetUserId}/follow`, {
+      await axios.delete(`${API_URL}/users/${targetUserId}/follow`, {
         params: { current_user_id: currentUserId }
       });
       setIsFollowing(false);
@@ -1000,7 +1003,7 @@ const handleViewProfile = (user: UserProfile) => {
       });
       // Refresh stats
       if (viewingProfile) {
-        const response = await axios.get(`http://localhost:8000/users/${viewingProfile.id}/follow-stats`);
+        const response = await axios.get(`${API_URL}/users/${viewingProfile.id}/follow-stats`);
         setViewingProfileStats(response.data);
       }
     } catch (error: any) {
@@ -1016,10 +1019,10 @@ const handleViewProfile = (user: UserProfile) => {
     setFollowersModal({type, userId});
     try {
       if (type === 'followers') {
-        const response = await axios.get(`http://localhost:8000/users/${userId}/followers`);
+        const response = await axios.get(`${API_URL}/users/${userId}/followers`);
         setFollowersList(response.data.followers);
       } else {
-        const response = await axios.get(`http://localhost:8000/users/${userId}/following`);
+        const response = await axios.get(`${API_URL}/users/${userId}/following`);
         setFollowingList(response.data.following);
       }
     } catch (error: any) {
@@ -1344,7 +1347,7 @@ const handleViewProfile = (user: UserProfile) => {
                           <>
                             {viewingProfile.avatar_name ? (
                               <img 
-                                src={`http://localhost:8000/avatars/${viewingProfile.avatar_name}`} 
+                                src={`${API_URL}/avatars/${viewingProfile.avatar_name}`} 
                                 alt={`${viewingProfile.displayName} Avatarı`} 
                                 className="profile-avatar" 
                                 onError={(e) => {
@@ -1838,7 +1841,7 @@ const handleViewProfile = (user: UserProfile) => {
                       title={avatar.name}
                     >
                       <img 
-                        src={`http://localhost:8000${avatar.url}`} 
+                        src={`${API_URL}${avatar.url}`} 
                         alt={avatar.name}
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
@@ -1952,7 +1955,7 @@ const handleViewProfile = (user: UserProfile) => {
                       <div className="comment-header">
                         {comment.avatar_name ? (
                           <img 
-                            src={`http://localhost:8000/avatars/${comment.avatar_name}`} 
+                            src={`${API_URL}/avatars/${comment.avatar_name}`} 
                             alt={comment.displayName}
                             className="comment-avatar"
                           />
