@@ -403,11 +403,11 @@ function App() {
         const currentUserId = getCurrentUserId(); // Bunu döngüden önce al
 
         const backendGallery: GalleryItem[] = userPosts.map((post, index) => ({
-          id: `backend_${index}_${post.original}`,
-          original: `${API_URL}/uploads/${post.original}`, 
-          improved: `${API_URL}/uploads/${post.improved}`,
+          id: `backend_${index}_${post.original_filename || index}`,
+          original: post.original,  // Full Cloudinary URL from backend
+          improved: post.improved,  // Full Cloudinary URL from backend
           filename: post.original_filename || "AI Çizimi",
-          originalFilename: post.original,
+          originalFilename: post.original_filename || `post_${index}`,
           timestamp: Date.now(),
           title: "Çizim", 
           emoji: "🎨",
@@ -675,8 +675,8 @@ function App() {
 
       // Set uploaded images for display
       const newImages = {
-        original: `${API_URL}${response.data.original_url}`,
-        improved: `${API_URL}${response.data.improved_url}`,
+        original: response.data.original_url,  // Full Cloudinary URL from backend
+        improved: response.data.improved_url,  // Full Cloudinary URL from backend
         filename: response.data.original_filename,
         mode: response.data.mode,
       };
