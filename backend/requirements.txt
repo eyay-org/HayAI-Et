@@ -6,3 +6,4 @@ openai==2.3.0
 python-dotenv==1.1.1
 pillow==11.3.0
 pymongo[srv]==4.15.4
+cloudinary==1.41.0
