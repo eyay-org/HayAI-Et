@@ -50,7 +50,30 @@
     "improved_image": "495b507d-6daa-406f-826e-ff6e7e261aea_improved.png",
     "timestamp": 1763754475.2901225,
     "mode": "cartoon",
-    "original_filename": "Ekran g\u00f6r\u00fcnt\u00fcs\u00fc 2025-11-21 221120.png"
+    "original_filename": "Ekran görüntüsü 2025-11-21 221120.png",
+    "comments": [
+      {
+        "id": "c9ec60fe-5f30-4ce3-9ed9-b66732a6ab41",
+        "user_id": 3,
+        "username": "luna_art",
+        "display_name": "Luna Demir",
+        "avatar_name": null,
+        "comment_text": "Kullandığın renkler müthiş! 🎨",
+        "timestamp": 1764348622.6280954
+      },
+      {
+        "id": "f142317c-a3f2-4093-b3bc-968d145361c9",
+        "user_id": 3,
+        "username": "luna_art",
+        "display_name": "Luna Demir",
+        "avatar_name": null,
+        "comment_text": "Bayıldım! 😍",
+        "timestamp": 1764348748.4383671
+      }
+    ],
+    "liked_by": [
+      3
+    ]
   },
   {
     "user_id": 1,
@@ -58,7 +81,7 @@
     "improved_image": "5f63c6c1-d260-4d00-b95e-c2e161b52d3d_improved.png",
     "timestamp": 1763754620.113335,
     "mode": "anime",
-    "original_filename": "Ekran g\u00f6r\u00fcnt\u00fcs\u00fc 2025-11-21 221139.png"
+    "original_filename": "Ekran görüntüsü 2025-11-21 221139.png"
   },
   {
     "user_id": 1,
@@ -66,7 +89,7 @@
     "improved_image": "0d132349-c1f2-4991-b4de-96f407236b2a_improved.png",
     "timestamp": 1763754750.3992426,
     "mode": "oil",
-    "original_filename": "Ekran g\u00f6r\u00fcnt\u00fcs\u00fc 2025-11-21 221149.png"
+    "original_filename": "Ekran görüntüsü 2025-11-21 221149.png"
   },
   {
     "user_id": 1,
@@ -74,7 +97,7 @@
     "improved_image": "dbe9cba1-4a02-4423-863e-71b46afb4c27_improved.png",
     "timestamp": 1763754828.3220234,
     "mode": "comic",
-    "original_filename": "Ekran g\u00f6r\u00fcnt\u00fcs\u00fc 2025-11-21 221114.png"
+    "original_filename": "Ekran görüntüsü 2025-11-21 221114.png"
   },
   {
     "user_id": 2,
@@ -82,7 +105,7 @@
     "improved_image": "91da7f89-98e5-46ff-b689-753fb9db5415_improved.png",
     "timestamp": 1764322618.8071697,
     "mode": "oil",
-    "original_filename": "Ekran g\u00f6r\u00fcnt\u00fcs\u00fc 2025-11-21 221114.png",
+    "original_filename": "Ekran görüntüsü 2025-11-21 221114.png",
     "liked_by": [
       1,
       2
@@ -92,19 +115,42 @@
         "id": "c7e2f3ea-89b1-4ac2-89e2-05294d9b6ea6",
         "user_id": 1,
         "username": "hayai",
-        "display_name": "HayAI Kullan\u0131c\u0131s\u0131",
+        "display_name": "HayAI Kullanıcısı",
         "avatar_name": null,
-        "comment_text": "\u00c7ok yeteneklisin! \ud83d\udc4f",
+        "comment_text": "Çok yeteneklisin! 👏",
         "timestamp": 1764323607.1096692
       },
       {
         "id": "a0c84258-a02a-4ee8-ad9a-99d0c0bce9e0",
         "user_id": 2,
         "username": "guest",
-        "display_name": "Misafir Kullan\u0131c\u0131",
+        "display_name": "Misafir Kullanıcı",
         "avatar_name": "avatar-7.jpg",
-        "comment_text": "Harika g\u00f6r\u00fcn\u00fcyor! \ud83c\udf1f",
+        "comment_text": "Harika görünüyor! 🌟",
         "timestamp": 1764324027.7639706
+      }
+    ]
+  },
+  {
+    "user_id": 3,
+    "image": "7833c463-bd67-4716-9767-ff851af37691.png",
+    "improved_image": "7833c463-bd67-4716-9767-ff851af37691_improved.png",
+    "timestamp": 1764348595.894991,
+    "mode": "inverse",
+    "original_filename": "Ekran görüntüsü 2024-08-06 212500.png",
+    "liked_by": [
+      3,
+      1
+    ],
+    "comments": [
+      {
+        "id": "c89cf396-bee3-42b0-92b7-12e2b9868ecc",
+        "user_id": 1,
+        "username": "hayai",
+        "display_name": "HayAI Kullanıcısı",
+        "avatar_name": null,
+        "comment_text": "Çizimlerin çok gerçekçi! ✨",
+        "timestamp": 1764348697.0436912
       }
     ]
   }

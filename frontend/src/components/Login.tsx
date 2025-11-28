@@ -1,38 +1,39 @@
 import React, { useState } from "react";
+import axios from "axios";
 
 interface LoginProps {
   onSuccess: (username: string) => void;
+  onRegisterClick: () => void;
 }
 
-// Static credential store for the prototype login screen.
-// Update or replace with a backend request when real authentication is ready.
-const allowedUsers = [
-  { username: "hayai", password: "artmagic" },
-  { username: "guest", password: "draw2025" },
-];
-
-const Login: React.FC<LoginProps> = ({ onSuccess }) => {
+const Login: React.FC<LoginProps> = ({ onSuccess, onRegisterClick }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const trimmedUsername = username.trim();
-
-    const matchingUser = allowedUsers.find(
-      (user) =>
-        user.username.toLowerCase() === trimmedUsername.toLowerCase() &&
-        user.password === password
-    );
-
-    if (!matchingUser) {
-      setError("Kullanıcı adı veya şifre hatalı. Lütfen tekrar deneyin.");
-      return;
-    }
-
     setError(null);
-    onSuccess(matchingUser.username);
+    setLoading(true);
+
+    try {
+      const response = await axios.post("http://localhost:8000/login", {
+        username: username.trim(),
+        password: password,
+      });
+
+      if (response.data.success) {
+        // Store user_id in localStorage for upload operations
+        localStorage.setItem("userId", response.data.user_id.toString());
+        onSuccess(response.data.username);
+      }
+    } catch (err: any) {
+      console.error("Login error:", err);
+      setError(err.response?.data?.detail || "Giriş yapılırken bir hata oluştu");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -76,13 +77,21 @@ const Login: React.FC<LoginProps> = ({ onSuccess }) => {
             </p>
           )}
 
-          <button type="submit" className="login-button">
-            Stüdyoya Gir
+          <button type="submit" className="login-button" disabled={loading}>
+            {loading ? "Giriş Yapılıyor..." : "Stüdyoya Gir"}
           </button>
         </form>
 
+        <div className="login-divider">
+          <span>veya</span>
+        </div>
+
+        <button className="register-button" onClick={onRegisterClick}>
+          🎨 Yeni Hesap Oluştur
+        </button>
+
         <div className="login-hint">
-          <p>Giriş bilgilerini daha sonra değiştirebilirsiniz.</p>
+          <p>Demo için: hayai / hayai123 veya guest / guest123</p>
         </div>
       </div>
     </div>

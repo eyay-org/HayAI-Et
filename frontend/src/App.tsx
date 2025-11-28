@@ -2,6 +2,7 @@ import React, { useState, useRef } from "react";
 import axios from "axios";
 import "./App.css";
 import Login from "./components/Login";
+import Register from "./components/Register";
 
 type TransformMode =
   | "normal"
@@ -205,6 +206,8 @@ function App() {
   const [commentingItem, setCommentingItem] = useState<GalleryItem | null>(null);
   const [predefinedComments, setPredefinedComments] = useState<string[]>([]);
   const [viewingComments, setViewingComments] = useState<{item: GalleryItem, comments: Comment[]} | null>(null);
+  // Registration state
+  const [showRegister, setShowRegister] = useState(false);
 
   const selectedModeMeta = MODE_LOOKUP[selectedMode] ?? MODE_OPTIONS[0];
 
@@ -224,28 +227,22 @@ function App() {
     }
   }, []);
 
-  // Update avatar when current user changes
-  React.useEffect(() => {
-    if (currentUser) {
-      (async () => {
-        const avatarUrl = await getCurrentUserAvatar();
-        setUserAvatar(avatarUrl);
-      })();
+  // Get current user ID from localStorage (set during login)
+  const getCurrentUserId = React.useCallback((): number | null => {
+    if (!currentUser) {
+      console.log("getCurrentUserId: No currentUser");
+      return null;
     }
+    const storedUserId = localStorage.getItem("userId");
+    console.log("getCurrentUserId: currentUser =", currentUser, ", storedUserId =", storedUserId);
+    if (storedUserId) {
+      return parseInt(storedUserId, 10);
+    }
+    return null;
   }, [currentUser]);
 
-  // Get current user ID from username
-  // hayai -> user ID 1, guest -> user ID 2 (now they are actual users in backend)
-  const getCurrentUserId = (): number | null => {
-    if (!currentUser) return null;
-    const usernameLower = currentUser.toLowerCase();
-    if (usernameLower === 'hayai') return 1;
-    if (usernameLower === 'guest') return 2;
-    return null;
-  };
-
   // Get current user avatar URL - fetch from backend
-  const getCurrentUserAvatar = async (): Promise<string | null> => {
+  const getCurrentUserAvatar = React.useCallback(async (): Promise<string | null> => {
     const currentUserId = getCurrentUserId();
     if (!currentUserId) return null;
     try {
@@ -262,7 +259,17 @@ function App() {
       console.error('Error fetching user avatar:', error);
       return null;
     }
-  };
+  }, [getCurrentUserId]);
+
+  // Update avatar when current user changes
+  React.useEffect(() => {
+    if (currentUser) {
+      (async () => {
+        const avatarUrl = await getCurrentUserAvatar();
+        setUserAvatar(avatarUrl);
+      })();
+    }
+  }, [currentUser, getCurrentUserAvatar]);
 
   // Load available avatars
   React.useEffect(() => {
@@ -347,7 +354,7 @@ function App() {
       setViewingProfileStats(null);
       setIsFollowing(false);
     }
-  }, [viewingProfile, currentUser]);
+  }, [viewingProfile, currentUser, getCurrentUserId]);
 
   // Fetch own follow stats
   React.useEffect(() => {
@@ -366,7 +373,7 @@ function App() {
           });
       }
     }
-  }, [viewingProfile, currentUser]);
+  }, [viewingProfile, currentUser, getCurrentUserId]);
 
   // Load gallery from localStorage on component mount
 // YENİ: Profil değiştiğinde veya ana sayfaya dönüldüğünde sunucudan resimleri çek
@@ -421,7 +428,7 @@ function App() {
         fetchBackendGallery();
     }
     
-  }, [viewingProfile, currentUser, currentView, activePage]);
+  }, [viewingProfile, currentUser, currentView, activePage, getCurrentUserId]);
 
   // Save gallery to localStorage whenever it changes
   React.useEffect(() => {
@@ -545,6 +552,7 @@ function App() {
     setSearchError(null);
     setActivePage('home');
     localStorage.removeItem('hayai-auth');
+    localStorage.removeItem('userId');
   };
 
   const handleFileSelect = (file: File) => {
@@ -637,9 +645,14 @@ function App() {
     
     // YENİ: Kullanıcı ID'sini ekle
     const currentUserId = getCurrentUserId();
-    if (currentUserId) {
-      formData.append("user_id", currentUserId.toString());
+    if (!currentUserId) {
+      setUploading(false);
+      setMessage({ type: "error", text: "Kullanıcı ID'si bulunamadı. Lütfen tekrar giriş yapın." });
+      return;
     }
+    
+    formData.append("user_id", currentUserId.toString());
+    console.log("Uploading with user_id:", currentUserId);
 
     try {
       const response = await axios.post<UploadResponse>(
@@ -1082,9 +1095,23 @@ const handleViewProfile = (user: UserProfile) => {
   ];
 
   if (!isAuthenticated) {
+    if (showRegister) {
+      return (
+        <div className="App">
+          <Register 
+            onSuccess={handleLoginSuccess} 
+            onBackToLogin={() => setShowRegister(false)}
+          />
+        </div>
+      );
+    }
+    
     return (
       <div className="App">
-        <Login onSuccess={handleLoginSuccess} />
+        <Login 
+          onSuccess={handleLoginSuccess}
+          onRegisterClick={() => setShowRegister(true)}
+        />
       </div>
     );
   }
