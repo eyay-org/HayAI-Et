@@ -109,8 +109,13 @@ const Register: React.FC<RegisterProps> = ({ onSuccess, onBackToLogin }) => {
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError("Şifre en az 6 karakter olmalıdır");
+    if (formData.password.length < 8) {
+      setError("Şifre en az 8 karakter olmalıdır");
+      return;
+    }
+
+    if (!/[a-zA-Z]/.test(formData.password) || !/[0-9]/.test(formData.password)) {
+      setError("Şifre hem harf hem de rakam içermelidir");
       return;
     }
 
@@ -127,7 +132,7 @@ const Register: React.FC<RegisterProps> = ({ onSuccess, onBackToLogin }) => {
     setLoading(true);
 
     try {
-      const response = await axios.post(`${API_URL}/register`, {
+      const response = await axios.post(`${API_URL}/api/auth/register`, {
         username: formData.username,
         email: formData.email,
         password: formData.password,
@@ -138,6 +143,11 @@ const Register: React.FC<RegisterProps> = ({ onSuccess, onBackToLogin }) => {
       });
 
       if (response.data.success) {
+        // Store user_id and token in localStorage
+        localStorage.setItem("userId", response.data.user_id.toString());
+        localStorage.setItem("userId", response.data.user_id.toString());
+        localStorage.setItem("hayai-token", response.data.access_token);
+        localStorage.setItem("hayai-refresh-token", response.data.refresh_token);
         onSuccess(response.data.username);
       }
     } catch (err: any) {
@@ -208,9 +218,9 @@ const Register: React.FC<RegisterProps> = ({ onSuccess, onBackToLogin }) => {
             type="password"
             value={formData.password}
             onChange={handleInputChange}
-            placeholder="En az 6 karakter"
+            placeholder="En az 8 karakter, harf ve rakam"
             required
-            minLength={6}
+            minLength={8}
           />
 
           <label className="login-label" htmlFor="confirmPassword">
