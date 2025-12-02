@@ -77,6 +77,7 @@ class TransformMode(str, Enum):
     ANIME = "anime"
     CARTOON = "cartoon"
     COMIC = "comic"
+    SPACE = "space"
     TEST_FAIL = "test_fail"
 
 
@@ -124,6 +125,10 @@ TRANSFORM_MODE_PROMPTS: Dict[str, str] = {
     TransformMode.COMIC.value: (
         "Color this drawing in a classic comic-book style with halftone textures, keeping all "
         "original shapes intact."
+    ),
+    TransformMode.SPACE.value: (
+        "Reimagine this drawing in a futuristic space adventure style with stars, planets, and "
+        "cosmic lighting, while maintaining the original composition."
     ),
     TransformMode.TEST_FAIL.value: "This request simulates a moderation rejection.",
 }
@@ -869,6 +874,7 @@ async def transform_image_api(
     current_user: dict = Depends(get_current_user)
 ):
     """Step 2: Transform image with AI"""
+    start_time = time.time()
     posts = get_posts_collection()
     
     # Verify ownership
@@ -934,6 +940,11 @@ async def transform_image_api(
         }
         
         posts.update_one({"image_id": request.image_id}, update_data)
+        
+        # Performance Logging
+        end_time = time.time()
+        duration = end_time - start_time
+        print(f"PERFORMANCE_LOG: Transformation for image {request.image_id} took {duration:.2f} seconds.")
         
         return {
             "post_id": request.image_id,
@@ -1006,6 +1017,7 @@ async def delete_post(filename: str):
 @app.post("/api/posts/{post_id}/like")
 async def like_post(
     post_id: str,
+    request: Request,
     current_user: dict = Depends(get_current_user)
 ):
     """Like a post (Idempotent)"""
@@ -1033,12 +1045,21 @@ async def like_post(
     updated_post = posts.find_one({"image_id": post_id})
     current_likes = len(updated_post.get("liked_by", []))
     
+    # Audit Log
+    await log_audit(
+        event="post_like",
+        user_id=current_user["user_id"],
+        ip_address=request.client.host,
+        details={"post_id": post_id}
+    )
+    
     return {"success": True, "likes": current_likes, "is_liked": True}
 
 
 @app.delete("/api/posts/{post_id}/like")
 async def unlike_post(
     post_id: str,
+    request: Request,
     current_user: dict = Depends(get_current_user)
 ):
     """Unlike a post (Idempotent)"""
@@ -1066,6 +1087,14 @@ async def unlike_post(
     updated_post = posts.find_one({"image_id": post_id})
     current_likes = len(updated_post.get("liked_by", []))
     
+    # Audit Log
+    await log_audit(
+        event="post_unlike",
+        user_id=current_user["user_id"],
+        ip_address=request.client.host,
+        details={"post_id": post_id}
+    )
+    
     return {"success": True, "likes": current_likes, "is_liked": False}
 
 
@@ -1081,6 +1110,7 @@ async def get_predefined_comments():
 async def add_comment(
     post_id: str,
     comment_data: CommentRequest,
+    request: Request,
     current_user: dict = Depends(get_current_user)
 ):
     """Add a comment to a post"""
@@ -1120,9 +1150,16 @@ async def add_comment(
         {"$push": {"comments": new_comment_db}}
     )
     
-    # Return response with text for frontend
     response_data = new_comment_db.copy()
     response_data["comment_text"] = PREDEFINED_COMMENTS[comment_data.preset_id]
+    
+    # Audit Log
+    await log_audit(
+        event="post_comment",
+        user_id=current_user["user_id"],
+        ip_address=request.client.host,
+        details={"post_id": post_id, "preset_id": comment_data.preset_id}
+    )
     
     return CommentResponse(**response_data)
 
