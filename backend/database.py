@@ -56,6 +56,11 @@ def get_counters_collection() -> Collection:
     return get_database()["counters"]
 
 
+def get_audit_logs_collection() -> Collection:
+    """Get audit logs collection"""
+    return get_database()["audit_logs"]
+
+
 def get_next_sequence(name: str) -> int:
     """Get next auto-increment ID for a collection"""
     counters = get_counters_collection()
@@ -86,6 +91,11 @@ def init_database():
     follows.create_index([("follower_id", 1), ("following_id", 1)], unique=True)
     follows.create_index("follower_id")
     follows.create_index("following_id")
+
+    # Audit Logs index
+    audit_logs = get_audit_logs_collection()
+    audit_logs.create_index("timestamp")
+    audit_logs.create_index("actor_id")
     
     # Initialize counter if not exists
     counters = get_counters_collection()

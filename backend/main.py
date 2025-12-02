@@ -29,6 +29,7 @@ from database import (
     get_users_collection,
     get_posts_collection,
     get_follows_collection,
+    get_audit_logs_collection,
     get_next_sequence,
     init_database,
 )
@@ -317,7 +318,21 @@ def get_available_avatars() -> List[AvatarInfo]:
                 ))
     
     avatars.sort(key=lambda x: x.name)
+    avatars.sort(key=lambda x: x.name)
     return avatars
+
+
+async def log_audit(event: str, user_id: int, ip_address: str, details: dict = None):
+    """Log security event to audit_logs collection"""
+    audit_logs = get_audit_logs_collection()
+    log_entry = {
+        "event": event,
+        "actor_id": user_id,
+        "timestamp": datetime.utcnow().isoformat(),
+        "ip_address": ip_address,
+        "details": details or {}
+    }
+    audit_logs.insert_one(log_entry)
 
 
 def user_doc_to_profile(user_doc: dict) -> UserProfile:
@@ -431,7 +446,7 @@ async def health_check():
 # ==================== Authentication ====================
 
 @app.post("/api/auth/register", response_model=LoginResponse, status_code=201)
-async def register_user(register_data: RegisterRequest):
+async def register_user(register_data: RegisterRequest, request: Request):
     """Register a new user"""
     users = get_users_collection()
     
@@ -504,6 +519,14 @@ async def register_user(register_data: RegisterRequest):
         expires_delta=refresh_token_expires
     )
 
+    # Audit Log
+    await log_audit(
+        event="user_register",
+        user_id=new_user_id,
+        ip_address=request.client.host,
+        details={"username": register_data.username, "role": register_data.role.value}
+    )
+
     return LoginResponse(
         success=True,
         access_token=access_token,
@@ -543,6 +566,14 @@ async def login_user(request: Request, login_data: LoginRequest):
     refresh_token = create_access_token(
         data={"sub": user["username"], "user_id": user["user_id"], "type": "refresh"},
         expires_delta=refresh_token_expires
+    )
+    
+    # Audit Log
+    await log_audit(
+        event="user_login",
+        user_id=user["user_id"],
+        ip_address=request.client.host,
+        details={"username": user["username"]}
     )
     
     return LoginResponse(
