@@ -60,9 +60,6 @@ AVATARS_DIR.mkdir(exist_ok=True)
 async def lifespan(app: FastAPI):
     """Initialize database on startup"""
     init_database()
-    ensure_default_users()
-    yield
-
     yield
 
 
@@ -151,13 +148,30 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 # Predefined comments that users can select from
-# Predefined comments that users can select from
 PREDEFINED_COMMENTS = {
     1: "Harika görünüyor! 🌟",
     2: "Çok yeteneklisin! 👏",
     3: "Bayıldım! 😍",
     4: "Kullandığın renkler müthiş! 🎨",
     5: "Çizimlerin çok gerçekçi! ✨",
+}
+
+# Predefined bios that users can select from
+PREDEFINED_BIOS = {
+    1: "Resim yapmayı seviyorum! 🎨",
+    2: "Geleceğin Sanatçısı ✨",
+    3: "Uzay Kaşifi 🚀",
+    4: "Doğa Dostu 🌿",
+    5: "Dinozor Hayranı 🦖",
+}
+
+# Predefined titles that users can select from
+PREDEFINED_TITLES = {
+    1: "Benim Eserim 🖼️",
+    2: "Buna Bakın! 👀",
+    3: "Komik Çizim 🤪",
+    4: "Uzay Macerası 🌌",
+    5: "Sürpriz! 🎁",
 }
 
 
@@ -212,7 +226,7 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     display_name: str
-    bio: Optional[str] = "HayAI Art Platform'unda çizimlerimi paylaşıyorum! 🎨"
+    bio_preset_id: int = 1
     role: UserRole = UserRole.CHILD
     age_verified: bool
     terms_accepted: bool
@@ -241,6 +255,7 @@ class TransformRequest(BaseModel):
     image_id: str
     theme: str
     visibility: Literal["public", "private"] = "public"
+    title_preset_id: int = 1
 
 
 class VisibilityUpdate(BaseModel):
@@ -356,96 +371,24 @@ async def log_audit(event: str, user_id: int, ip_address: str, details: dict = N
 
 def user_doc_to_profile(user_doc: dict) -> UserProfile:
     """Convert MongoDB user document to UserProfile"""
+    # Get bio from preset_id if available, otherwise use bio field
+    bio_preset_id = user_doc.get("bio_preset_id", 1)
+    if bio_preset_id in PREDEFINED_BIOS:
+        bio = PREDEFINED_BIOS[bio_preset_id]
+    else:
+        bio = user_doc.get("bio", PREDEFINED_BIOS[1])
+    
     return UserProfile(
         id=user_doc["user_id"],
         username=user_doc["username"],
         display_name=user_doc.get("display_name", user_doc["username"]),
-        bio=user_doc.get("bio", ""),
+        bio=bio,
         interests=user_doc.get("interests", []),
         avatar_name=user_doc.get("avatar_name"),
         posts=[],
     )
 
 
-def ensure_default_users():
-    """Ensure default users exist in database"""
-    users = get_users_collection()
-
-    default_users = [
-        {
-            "user_id": 1,
-            "username": "hayai",
-            "email": "hayai@example.com",
-            "password_hash": hash_password("hayai123"),
-            "display_name": "HayAI Kullanıcısı",
-            "bio": "HayAI Art Platform'unda çizimlerimi paylaşıyorum! 🎨",
-            "interests": ["ai", "sanat", "çizim"],
-            "avatar_name": None,
-            "created_at": datetime.now().isoformat(),
-            "terms_accepted": True,
-            "terms_accepted_at": datetime.now().isoformat(),
-            "age_verified": True,
-        },
-        {
-            "user_id": 2,
-            "username": "guest",
-            "email": "guest@example.com",
-            "password_hash": hash_password("guest123"),
-            "display_name": "Misafir Kullanıcı",
-            "bio": "HayAI Art Platform'unda çizimlerimi paylaşıyorum! 🎨",
-            "interests": ["sanat", "çizim"],
-            "avatar_name": None,
-            "created_at": datetime.now().isoformat(),
-            "terms_accepted": True,
-            "terms_accepted_at": datetime.now().isoformat(),
-            "age_verified": True,
-        },
-        # Demo users
-        {
-            "user_id": 3,
-            "username": "luna_art",
-            "email": "luna@example.com",
-            "password_hash": hash_password("demo123"),
-            "display_name": "Luna Demir",
-            "bio": "Renkli illüstrasyonlar ve çocuk kitabı karakterleri çiziyorum.",
-            "interests": ["illüstrasyon", "çocuk kitapları", "pastel"],
-            "avatar_name": None,
-            "created_at": datetime.now().isoformat(),
-            "terms_accepted": True,
-            "age_verified": True,
-        },
-        {
-            "user_id": 4,
-            "username": "pixelbaran",
-            "email": "baran@example.com",
-            "password_hash": hash_password("demo123"),
-            "display_name": "Baran Yıldız",
-            "bio": "Animasyon ve piksel sanatına meraklı bir tasarımcı.",
-            "interests": ["animasyon", "piksel", "retro"],
-            "avatar_name": None,
-            "created_at": datetime.now().isoformat(),
-            "terms_accepted": True,
-            "age_verified": True,
-        },
-        {
-            "user_id": 5,
-            "username": "selincreates",
-            "email": "selin@example.com",
-            "password_hash": hash_password("demo123"),
-            "display_name": "Selin Kara",
-            "bio": "Çocuklar için STEM temalı çizimler ve posterler hazırlıyorum.",
-            "interests": ["stem", "poster", "renkli"],
-            "avatar_name": None,
-            "created_at": datetime.now().isoformat(),
-            "terms_accepted": True,
-            "age_verified": True,
-        },
-    ]
-
-    for user_data in default_users:
-        if not users.find_one({"user_id": user_data["user_id"]}):
-            users.insert_one(user_data)
-            print(f"✅ Created default user: {user_data['username']}")
 
 
 # ==================== API Endpoints ====================
@@ -523,6 +466,10 @@ async def register_user(register_data: RegisterRequest, request: Request):
             status_code=400, detail="Şifre hem harf hem de rakam içermelidir"
         )
 
+    # Validate bio_preset_id
+    if register_data.bio_preset_id not in PREDEFINED_BIOS:
+        raise HTTPException(status_code=400, detail="Geçersiz biyografi ID'si.")
+
     # Create new user
     new_user_id = get_next_sequence("user_id")
     current_time = datetime.now().isoformat()
@@ -533,13 +480,9 @@ async def register_user(register_data: RegisterRequest, request: Request):
         "email": register_data.email,
         "password_hash": hash_password(register_data.password),
         "display_name": register_data.display_name,
-        "bio": register_data.bio
-        or "HayAI Art Platform'unda çizimlerimi paylaşıyorum! 🎨",
+        "bio_preset_id": register_data.bio_preset_id,
         "interests": [],
         "avatar_name": None,
-        "created_at": current_time,
-        "terms_accepted": register_data.terms_accepted,
-        "terms_accepted_at": current_time,
         "created_at": current_time,
         "terms_accepted": register_data.terms_accepted,
         "terms_accepted_at": current_time,
@@ -702,17 +645,35 @@ async def get_user(
 
     posts_data = []
     for post in user_posts:
+        # Get title from preset_id if available, otherwise use title field
+        title_preset_id = post.get("title_preset_id", 1)
+        if title_preset_id in PREDEFINED_TITLES:
+            title = PREDEFINED_TITLES[title_preset_id]
+        else:
+            title = post.get("title", PREDEFINED_TITLES[1])
+        
+        # Process comments to ensure comment_text is present
+        processed_comments = []
+        for comment in post.get("comments", []):
+            comment_dict = dict(comment)
+            if "preset_id" in comment_dict and comment_dict["preset_id"] in PREDEFINED_COMMENTS:
+                comment_dict["comment_text"] = PREDEFINED_COMMENTS[comment_dict["preset_id"]]
+            elif "comment_text" not in comment_dict:
+                # Fallback for old comments
+                comment_dict["comment_text"] = ""
+            processed_comments.append(comment_dict)
+        
         posts_data.append(
             {
                 "original": post.get("original_url"),
                 "improved": post.get("improved_url"),
                 "mode": post.get("mode", TransformMode.NORMAL.value),
                 "original_filename": post.get("image_id"),
+                "title": title,
                 "like_count": len(post.get("liked_by", [])),
                 "liked_by": post.get("liked_by", []),
-                "comment_count": len(post.get("comments", [])),
-                "comment_count": len(post.get("comments", [])),
-                "comments": post.get("comments", []),
+                "comment_count": len(processed_comments),
+                "comments": processed_comments,
                 "visibility": post.get("visibility", "public"),
             }
         )
@@ -949,6 +910,10 @@ async def transform_image_api(
     if mode_value not in TRANSFORM_MODE_PROMPTS:
         raise HTTPException(status_code=400, detail="Invalid theme")
 
+    # Validate title_preset_id
+    if request.title_preset_id not in PREDEFINED_TITLES:
+        raise HTTPException(status_code=400, detail="Geçersiz başlık ID'si.")
+
     prompt = TRANSFORM_MODE_PROMPTS[mode_value]
 
     try:
@@ -979,6 +944,8 @@ async def transform_image_api(
                 "improved_url": image_record["original_url"],
                 "improved_public_id": image_record["original_public_id"],
             }
+            # Get title from preset
+            title_text = PREDEFINED_TITLES.get(request.title_preset_id, PREDEFINED_TITLES[1])
             update_data = {
                 "$set": {
                     "improved_url": result["improved_url"],
@@ -988,6 +955,8 @@ async def transform_image_api(
                     "visibility": final_visibility,
                     "kind": ImageKind.AI.value,
                     "timestamp": time.time(),
+                    "title_preset_id": request.title_preset_id,
+                    "title": title_text,
                     "liked_by": [],
                     "comments": [],
                 }
@@ -1021,6 +990,9 @@ async def transform_image_api(
             final_status = PostStatus.APPROVED.value
             final_visibility = request.visibility  # Use user selection
 
+        # Get title from preset
+        title_text = PREDEFINED_TITLES.get(request.title_preset_id, PREDEFINED_TITLES[1])
+        
         update_data = {
             "$set": {
                 "improved_url": result["improved_url"],
@@ -1030,6 +1002,8 @@ async def transform_image_api(
                 "visibility": final_visibility,
                 "kind": ImageKind.AI.value,
                 "timestamp": time.time(),
+                "title_preset_id": request.title_preset_id,
+                "title": title_text,
                 "liked_by": [],
                 "comments": [],
             }
@@ -1207,6 +1181,20 @@ async def get_predefined_comments():
     # Convert dict to list of objects for frontend
     comments_list = [{"id": k, "text": v} for k, v in PREDEFINED_COMMENTS.items()]
     return {"comments": comments_list}
+
+
+@app.get("/api/presets/bios")
+async def get_predefined_bios():
+    """Get the list of predefined bios"""
+    bios_list = [{"id": k, "text": v} for k, v in PREDEFINED_BIOS.items()]
+    return {"bios": bios_list}
+
+
+@app.get("/api/presets/titles")
+async def get_predefined_titles():
+    """Get the list of predefined titles"""
+    titles_list = [{"id": k, "text": v} for k, v in PREDEFINED_TITLES.items()]
+    return {"titles": titles_list}
 
 
 @app.post(
