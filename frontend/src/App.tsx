@@ -139,6 +139,7 @@ interface UserProfile {
     comment_count: number;
     comments: Comment[];
     visibility?: 'public' | 'private';
+    title?: string;
   }>;
 }
 
@@ -164,6 +165,7 @@ function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedMode, setSelectedMode] = useState<TransformMode>(MODE_OPTIONS[0].key);
   const [visibility, setVisibility] = useState<"public" | "private">("public");
+  const [titlePresetId, setTitlePresetId] = useState<number>(1);
   const [preview, setPreview] = useState<string>("");
   const [uploading, setUploading] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<{
@@ -188,9 +190,6 @@ function App() {
   } | null>(null);
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
   const [currentView, setCurrentView] = useState<'upload' | 'profile'>('upload');
-  const [editingItem, setEditingItem] = useState<GalleryItem | null>(null);
-  const [editTitle, setEditTitle] = useState<string>('');
-  const [editEmoji, setEditEmoji] = useState<string>('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   // Profile state
@@ -213,18 +212,71 @@ function App() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [selectedUserIsFollowing, setSelectedUserIsFollowing] = useState<boolean>(false);
   const searchAbortController = React.useRef<AbortController | null>(null);
   const searchDelayRef = React.useRef<number | undefined>(undefined);
   // Comment modal state
   const [commentModalOpen, setCommentModalOpen] = useState(false);
   const [commentingItem, setCommentingItem] = useState<GalleryItem | null>(null);
   const [predefinedComments, setPredefinedComments] = useState<{ id: number; text: string }[]>([]);
+  const [predefinedTitles, setPredefinedTitles] = useState<{ id: number; text: string }[]>([]);
   const [viewingComments, setViewingComments] = useState<{ item: GalleryItem, comments: Comment[] } | null>(null);
   // Registration state
   const [showRegister, setShowRegister] = useState(false);
 
   const selectedModeMeta = MODE_LOOKUP[selectedMode] ?? MODE_OPTIONS[0];
 
+  // Helper function to add Turkish possessive suffix
+  const addTurkishPossessive = (name: string): string => {
+    if (!name || name.length === 0) return name;
+  
+    // İsimden kesme işaretini ayır (Eğer varsa temizleyelim)
+    const cleanName = name.replace(/'/g, "");
+    
+    // Son harfi al
+    const lastChar = cleanName[cleanName.length - 1].toLowerCase();
+    
+    // Türkçe sesli harfler
+    const vowels = ['a', 'e', 'ı', 'i', 'o', 'ö', 'u', 'ü'];
+    
+    // İsim içindeki son sesli harfi bulmamız gerekiyor (Ünlü uyumu için)
+    // İsmi tersten tarayıp ilk karşılaştığımız sesli harfi alacağız
+    let lastVowel = '';
+    for (let i = cleanName.length - 1; i >= 0; i--) {
+      const char = cleanName[i].toLowerCase();
+      if (vowels.includes(char)) {
+        lastVowel = char;
+        break;
+      }
+    }
+  
+    // Eğer isimde hiç sesli harf yoksa (örn: "Sky") varsayılan olarak ince 'i' varmış gibi davranabiliriz 
+    // ya da son harfin okunuşuna göre (Yabancı isimler) bir mantık kurmak gerekir. 
+    // Şimdilik varsayılanı 'e/i' grubu kabul edelim.
+    if (!lastVowel) lastVowel = 'e';
+  
+    // Ek belirleme mantığı (4'lü uyum kuralı: ı/i/u/ü)
+    let suffixVowel = '';
+    
+    // Kalınlık-Incelik ve Düzlük-Yuvarlaklık kuralları
+    if (['a', 'ı'].includes(lastVowel)) {
+      suffixVowel = 'ı';
+    } else if (['e', 'i'].includes(lastVowel)) {
+      suffixVowel = 'i';
+    } else if (['o', 'u'].includes(lastVowel)) {
+      suffixVowel = 'u';
+    } else if (['ö', 'ü'].includes(lastVowel)) {
+      suffixVowel = 'ü';
+    }
+  
+    // Son harf sesli mi? (Kaynaştırma harfi 'n' gerekir mi?)
+    if (vowels.includes(lastChar)) {
+      return `${name}'n${suffixVowel}n`; // Ali -> Ali'nin, Esra -> Esra'nın
+    } else {
+      return `${name}'${suffixVowel}n`;  // Ahmet -> Ahmet'in, Yusuf -> Yusuf'un
+    }
+  };
+  
   React.useEffect(() => {
     const storedAuth = localStorage.getItem('hayai-auth');
     if (storedAuth) {
@@ -420,7 +472,7 @@ function App() {
           filename: post.original_filename || "AI Çizimi",
           originalFilename: post.original_filename || `post_${index}`,
           timestamp: Date.now(),
-          title: "Çizim",
+          title: post.title || "Benim Eserim 🖼️",
           emoji: "🎨",
           likeCount: post.like_count || 0,
           isLiked: currentUserId ? (post.liked_by || []).includes(currentUserId) : false,
@@ -722,6 +774,7 @@ function App() {
           image_id: imageId,
           theme: selectedMode,
           visibility: visibility,
+          title_preset_id: titlePresetId,
         }
       );
 
@@ -739,6 +792,9 @@ function App() {
       };
       setUploadedImages(newImages);
 
+      // Get title text from preset
+      const selectedTitle = predefinedTitles.find(t => t.id === titlePresetId)?.text || "Benim Eserim 🖼️";
+      
       // Add to gallery
       const newGalleryItem: GalleryItem = {
         id: Date.now().toString(),
@@ -752,7 +808,7 @@ function App() {
         mode: selectedMode,
         commentCount: 0,
         comments: [],
-        title: "Çizim",
+        title: selectedTitle,
         emoji: selectedModeMeta?.emoji ?? "🎨",
         visibility: visibility
       };
@@ -876,33 +932,6 @@ function App() {
     }
   };
 
-  const openEditModal = (item: GalleryItem) => {
-    setEditingItem(item);
-    setEditTitle(item.title || '');
-    setEditEmoji(item.emoji || '🎨');
-  };
-
-  const closeEditModal = () => {
-    setEditingItem(null);
-    setEditTitle('');
-    setEditEmoji('');
-  };
-
-  const saveEdit = () => {
-    if (!editingItem) return;
-
-    setGallery(prev => prev.map(item =>
-      item.id === editingItem.id
-        ? { ...item, title: editTitle.trim(), emoji: editEmoji }
-        : item
-    ));
-
-    closeEditModal();
-    setMessage({
-      type: "success",
-      text: `✅ "${editingItem.filename}" güncellendi!`,
-    });
-  };
 
   // Load predefined comments on mount
   React.useEffect(() => {
@@ -925,6 +954,27 @@ function App() {
     loadPredefinedComments();
   }, []);
 
+  // Load predefined titles on mount
+  React.useEffect(() => {
+    const loadPredefinedTitles = async () => {
+      try {
+        const response = await api.get<{ titles: { id: number; text: string }[] }>(`${API_URL}/api/presets/titles`);
+        setPredefinedTitles(response.data.titles);
+      } catch (error) {
+        console.error('Error loading predefined titles:', error);
+        // Fallback
+        setPredefinedTitles([
+          { id: 1, text: "Benim Eserim 🖼️" },
+          { id: 2, text: "Buna Bakın! 👀" },
+          { id: 3, text: "Komik Çizim 🤪" },
+          { id: 4, text: "Uzay Macerası 🌌" },
+          { id: 5, text: "Sürpriz! 🎁" }
+        ]);
+      }
+    };
+    loadPredefinedTitles();
+  }, []);
+
   const openCommentModal = (item: GalleryItem) => {
     setCommentingItem(item);
     setCommentModalOpen(true);
@@ -936,16 +986,31 @@ function App() {
   };
 
   const handleAddComment = async (presetId: number) => {
+    console.log('handleAddComment called with presetId:', presetId);
     const currentUserId = getCurrentUserId();
     if (!currentUserId || !commentingItem) {
+      console.log('Missing currentUserId or commentingItem:', { currentUserId, commentingItem });
       setMessage({ type: "error", text: "Yorum yapmak için giriş yapmalısınız!" });
       return;
     }
 
+    if (!commentingItem.originalFilename) {
+      console.error('commentingItem.originalFilename is missing:', commentingItem);
+      setMessage({ type: "error", text: "❌ Gönderi bilgisi bulunamadı!" });
+      return;
+    }
+
     try {
-      const response = await api.post<Comment>(`${API_URL}/api/posts/${commentingItem.originalFilename}/comment`, {
-        preset_id: presetId
+      console.log('Sending comment request:', {
+        postId: commentingItem.originalFilename,
+        presetId: presetId
       });
+      
+      const response = await api.post<Comment>(`${API_URL}/api/posts/${commentingItem.originalFilename}/comment`, {
+        presetId: presetId
+      });
+
+      console.log('Comment response:', response.data);
 
       // Update gallery with new comment
       setGallery(prev => prev.map(item => {
@@ -966,6 +1031,7 @@ function App() {
       });
     } catch (error: any) {
       console.error('Comment error:', error);
+      console.error('Error response:', error.response);
       setMessage({
         type: "error",
         text: `❌ Yorum eklenirken hata oluştu: ${error.response?.data?.detail || error.message}`,
@@ -987,6 +1053,20 @@ function App() {
 
   const handleSelectUser = (user: UserProfile) => {
     setSelectedUser(user);
+    // Check if current user is following this user
+    const currentUserId = getCurrentUserId();
+    if (currentUserId) {
+      api.get(`${API_URL}/users/${currentUserId}/is-following/${user.id}`)
+        .then(response => {
+          setSelectedUserIsFollowing(response.data.is_following);
+        })
+        .catch(error => {
+          console.error('Error checking follow status:', error);
+          setSelectedUserIsFollowing(false);
+        });
+    } else {
+      setSelectedUserIsFollowing(false);
+    }
   };
 
   const handleViewProfile = (user: UserProfile) => {
@@ -1003,6 +1083,7 @@ function App() {
     setActivePage('home');
     setCurrentView('profile');
     setSelectedUser(null);
+    setSelectedUserIsFollowing(false);
   };
 
   const handleBackToMyProfile = () => {
@@ -1104,6 +1185,7 @@ function App() {
 
   const clearSelectedUser = () => {
     setSelectedUser(null);
+    setSelectedUserIsFollowing(false);
   };
 
   // Available emojis for selection - organized by popularity for children
@@ -1337,6 +1419,28 @@ function App() {
                       </select>
                     </div>
 
+                    <div className="mode-selector">
+                      <div className="mode-selector-header">
+                        <h3>Başlık Seçin</h3>
+                        <p>Çiziminiz için bir başlık seçin</p>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' }}>
+                        {predefinedTitles.map((title) => (
+                          <label key={title.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px', borderRadius: '8px', backgroundColor: titlePresetId === title.id ? 'rgba(116, 192, 252, 0.15)' : 'transparent' }}>
+                            <input
+                              type="radio"
+                              name="titlePresetId"
+                              value={title.id}
+                              checked={titlePresetId === title.id}
+                              onChange={(e) => setTitlePresetId(parseInt(e.target.value))}
+                              style={{ cursor: 'pointer' }}
+                            />
+                            <span>{title.text}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
                     {message && (
                       <div className={`message ${message.type}`}>{message.text}</div>
                     )}
@@ -1423,7 +1527,7 @@ function App() {
                           {viewingProfile.avatar_name ? (
                             <img
                               src={`${API_URL}/avatars/${viewingProfile.avatar_name}`}
-                              alt={`${viewingProfile.displayName} Avatarı`}
+                              alt={`${viewingProfile.displayName || viewingProfile.username} Avatarı`}
                               className="profile-avatar"
                               onError={(e) => {
                                 // If image fails to load, hide image and show placeholder
@@ -1475,7 +1579,7 @@ function App() {
                         @{viewingProfile ? viewingProfile.username : (currentUser || 'misafir')}
                       </h2>
                       {viewingProfile && (
-                        <p className="profile-display-name">{viewingProfile.displayName}</p>
+                        <p className="profile-display-name">{viewingProfile.displayName || viewingProfile.username}</p>
                       )}
                       <div className="profile-stats">
                         <div className="profile-stat">
@@ -1559,7 +1663,7 @@ function App() {
                   {/* Gallery Section */}
                   <div className="profile-gallery-section">
                     <div className="profile-gallery-header">
-                      <h2>🖼️ {viewingProfile ? `${viewingProfile.displayName}'nin Galerisi` : 'Sanat Galerim'}</h2>
+                      <h2>🖼️ {viewingProfile ? `${addTurkishPossessive(viewingProfile.displayName || viewingProfile.username)} Galerisi` : 'Sanat Galerim'}</h2>
                       <p>AI ile geliştirilmiş çizimlerin koleksiyonu</p>
                       {!viewingProfile && gallery.length > 0 && (
                         <button className="clear-gallery-button" onClick={clearGallery}>
@@ -1640,13 +1744,6 @@ function App() {
                                     title={item.visibility === 'private' ? "Gizli (Herkese Aç Yap)" : "Herkese Aç (Gizle)"}
                                   >
                                     {item.visibility === 'private' ? '🔒' : '🌍'}
-                                  </button>
-                                  <button
-                                    className="edit-photo-button"
-                                    onClick={() => openEditModal(item)}
-                                    title="Başlık ve emoji düzenle"
-                                  >
-                                    ✏️
                                   </button>
                                   <button
                                     className="remove-photo-button"
@@ -1732,7 +1829,7 @@ function App() {
                       {searchResults.map((user) => (
                         <li key={user.id}>
                           <button type="button" className={`search-result-item ${selectedUser?.id === user.id ? 'active' : ''}`} onClick={() => handleSelectUser(user)}>
-                            <span className="search-result-name">{user.displayName}</span>
+                            <span className="search-result-name">{user.displayName || user.username}</span>
                             <span className="search-result-username">@{user.username}</span>
                             <span className="search-result-bio">{user.bio}</span>
                           </button>
@@ -1749,7 +1846,7 @@ function App() {
                     <div className="profile-preview">
                       <div className="profile-header">
                         <div>
-                          <h3>{selectedUser.displayName}</h3>
+                          <h3>{selectedUser.displayName || selectedUser.username}</h3>
                           <p className="profile-username">@{selectedUser.username}</p>
                         </div>
                         <button type="button" className="profile-close" onClick={clearSelectedUser}>
@@ -1774,8 +1871,50 @@ function App() {
                         >
                           👤 Profili Görüntüle
                         </button>
-                        <button type="button" className="add-friend-button">
-                          🤝 Arkadaş Olarak Ekle
+                        <button 
+                          type="button" 
+                          className="add-friend-button"
+                          onClick={async () => {
+                            if (!selectedUser) return;
+                            const currentUserId = getCurrentUserId();
+                            if (!currentUserId) {
+                              setMessage({
+                                type: "error",
+                                text: "❌ Kullanıcı kimliği bulunamadı. Lütfen tekrar giriş yapın.",
+                              });
+                              return;
+                            }
+                            
+                            try {
+                              if (selectedUserIsFollowing) {
+                                await api.delete(`${API_URL}/users/${selectedUser.id}/follow`, {
+                                  params: { current_user_id: currentUserId }
+                                });
+                                setSelectedUserIsFollowing(false);
+                                setMessage({
+                                  type: "success",
+                                  text: "✅ Takipten çıkıldı.",
+                                });
+                              } else {
+                                await api.post(`${API_URL}/users/${selectedUser.id}/follow`, null, {
+                                  params: { current_user_id: currentUserId }
+                                });
+                                setSelectedUserIsFollowing(true);
+                                setMessage({
+                                  type: "success",
+                                  text: "✅ Kullanıcı takip edildi!",
+                                });
+                              }
+                            } catch (error: any) {
+                              console.error('Error following/unfollowing user:', error);
+                              setMessage({
+                                type: "error",
+                                text: `❌ İşlem başarısız: ${error.response?.data?.detail || error.message}`,
+                              });
+                            }
+                          }}
+                        >
+                          {selectedUserIsFollowing ? '✓ Takip Ediliyor' : '➕ Takip Et'}
                         </button>
                       </div>
                     </div>
@@ -1949,53 +2088,6 @@ function App() {
           </div>
         )}
 
-        {/* Edit Modal */}
-        {editingItem && (
-          <div className="modal-overlay" onClick={closeEditModal}>
-            <div className="edit-modal-content" onClick={(e) => e.stopPropagation()}>
-              <button className="modal-close" onClick={closeEditModal}>
-                ✕
-              </button>
-              <h3>Çizimi Düzenle</h3>
-              <div className="edit-form">
-                <div className="edit-field">
-                  <label>Başlık:</label>
-                  <input
-                    type="text"
-                    value={editTitle}
-                    onChange={(e) => setEditTitle(e.target.value)}
-                    placeholder="Çiziminiz için bir başlık yazın..."
-                    maxLength={30}
-                    className="edit-input"
-                  />
-                </div>
-                <div className="edit-field">
-                  <label>Emoji Seçin:</label>
-                  <div className="emoji-picker">
-                    {availableEmojis.map((emoji) => (
-                      <button
-                        key={emoji}
-                        className={`emoji-option ${editEmoji === emoji ? 'selected' : ''}`}
-                        onClick={() => setEditEmoji(emoji)}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="edit-actions">
-                  <button className="cancel-button" onClick={closeEditModal}>
-                    İptal
-                  </button>
-                  <button className="save-button" onClick={saveEdit}>
-                    Kaydet
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Comment Selection Modal */}
         {commentModalOpen && commentingItem && (
           <div className="modal-overlay" onClick={closeCommentModal}>
@@ -2009,8 +2101,14 @@ function App() {
                 {predefinedComments.map((comment) => (
                   <button
                     key={comment.id}
+                    type="button"
                     className="comment-option"
-                    onClick={() => handleAddComment(comment.id)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('Comment button clicked:', comment.id);
+                      handleAddComment(comment.id);
+                    }}
                   >
                     {comment.text}
                   </button>

@@ -76,13 +76,35 @@ const Register: React.FC<RegisterProps> = ({ onSuccess, onBackToLogin }) => {
     password: "",
     confirmPassword: "",
     displayName: "",
-    bio: "",
+    bioPresetId: 1,
   });
   const [ageVerified, setAgeVerified] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [showBeyanname, setShowBeyanname] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [predefinedBios, setPredefinedBios] = useState<{ id: number; text: string }[]>([]);
+
+  React.useEffect(() => {
+    // Load predefined bios
+    const loadPredefinedBios = async () => {
+      try {
+        const response = await axios.get<{ bios: { id: number; text: string }[] }>(`${API_URL}/api/presets/bios`);
+        setPredefinedBios(response.data.bios);
+      } catch (error) {
+        console.error('Error loading predefined bios:', error);
+        // Fallback
+        setPredefinedBios([
+          { id: 1, text: "Resim yapmayı seviyorum! 🎨" },
+          { id: 2, text: "Geleceğin Sanatçısı ✨" },
+          { id: 3, text: "Uzay Kaşifi 🚀" },
+          { id: 4, text: "Doğa Dostu 🌿" },
+          { id: 5, text: "Dinozor Hayranı 🦖" }
+        ]);
+      }
+    };
+    loadPredefinedBios();
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -137,7 +159,7 @@ const Register: React.FC<RegisterProps> = ({ onSuccess, onBackToLogin }) => {
         email: formData.email,
         password: formData.password,
         display_name: formData.displayName || formData.username,
-        bio: formData.bio || "HayAI Art Platform'unda çizimlerimi paylaşıyorum! 🎨",
+        bio_preset_id: formData.bioPresetId,
         age_verified: ageVerified,
         terms_accepted: termsAccepted,
       });
@@ -237,19 +259,24 @@ const Register: React.FC<RegisterProps> = ({ onSuccess, onBackToLogin }) => {
             required
           />
 
-          <label className="login-label" htmlFor="bio">
-            Biyografi
+          <label className="login-label">
+            Biyografi Seçin
           </label>
-          <textarea
-            id="bio"
-            name="bio"
-            className="login-input"
-            value={formData.bio}
-            onChange={handleInputChange}
-            placeholder="Kendiniz hakkında birkaç kelime (opsiyonel)"
-            rows={3}
-            style={{ resize: 'vertical' }}
-          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {predefinedBios.map((bio) => (
+              <label key={bio.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="bioPresetId"
+                  value={bio.id}
+                  checked={formData.bioPresetId === bio.id}
+                  onChange={(e) => setFormData(prev => ({ ...prev, bioPresetId: parseInt(e.target.value) }))}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span>{bio.text}</span>
+              </label>
+            ))}
+          </div>
 
           <div className="checkbox-group">
             <label className="checkbox-label">
