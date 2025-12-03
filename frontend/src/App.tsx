@@ -16,8 +16,7 @@ type TransformMode =
   | "anime"
   | "cartoon"
   | "comic"
-  | "space"
-  | "test_fail";
+  | "space";
 
 interface TransformModeOption {
   key: TransformMode;
@@ -74,12 +73,6 @@ const MODE_OPTIONS: TransformModeOption[] = [
     label: "🚀 Space Adventure",
     description: "Space theme",
     emoji: "🪐",
-  },
-  {
-    key: "test_fail",
-    label: "🔴 TEST: Force Rejection",
-    description: "Moderation Test",
-    emoji: "🚫",
   },
 ];
 
