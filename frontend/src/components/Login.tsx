@@ -21,14 +21,16 @@ const Login: React.FC<LoginProps> = ({ onSuccess, onRegisterClick }) => {
     setLoading(true);
 
     try {
-      const response = await axios.post(`${API_URL}/login`, {
+      const response = await axios.post(`${API_URL}/api/auth/login`, {
         username: username.trim(),
         password: password,
       });
 
       if (response.data.success) {
-        // Store user_id in localStorage for upload operations
+        // Store user_id and token in localStorage
         localStorage.setItem("userId", response.data.user_id.toString());
+        localStorage.setItem("hayai-token", response.data.access_token);
+        localStorage.setItem("hayai-refresh-token", response.data.refresh_token);
         onSuccess(response.data.username);
       }
     } catch (err: any) {

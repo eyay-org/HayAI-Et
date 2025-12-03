@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
 import axios from "axios";
+import api from "./api";
 import "./App.css";
 import Login from "./components/Login";
 import Register from "./components/Register";
@@ -14,7 +15,9 @@ type TransformMode =
   | "inverse"
   | "anime"
   | "cartoon"
-  | "comic";
+  | "comic"
+  | "space"
+  | "test_fail";
 
 interface TransformModeOption {
   key: TransformMode;
@@ -66,6 +69,18 @@ const MODE_OPTIONS: TransformModeOption[] = [
     description: "Klasik halftone doku hissi.",
     emoji: "📰",
   },
+  {
+    key: "space",
+    label: "🚀 Space Adventure",
+    description: "Space theme",
+    emoji: "🪐",
+  },
+  {
+    key: "test_fail",
+    label: "🔴 TEST: Force Rejection",
+    description: "Moderation Test",
+    emoji: "🚫",
+  },
 ];
 
 const MODE_LOOKUP: Record<TransformMode, TransformModeOption> = MODE_OPTIONS.reduce(
@@ -111,6 +126,7 @@ interface GalleryItem {
   mode?: TransformMode;
   commentCount: number;
   comments: Comment[];
+  visibility: 'public' | 'private';
 }
 
 interface UserProfile {
@@ -120,15 +136,16 @@ interface UserProfile {
   bio: string;
   interests: string[];
   avatar_name?: string | null;
-  posts?: Array<{ 
-    original: string; 
-    improved: string; 
-    like_count: number; 
+  posts?: Array<{
+    original: string;
+    improved: string;
+    like_count: number;
     liked_by: number[];
     mode?: TransformMode;
     original_filename?: string;
     comment_count: number;
     comments: Comment[];
+    visibility?: 'public' | 'private';
   }>;
 }
 
@@ -153,6 +170,7 @@ interface SearchApiResponse {
 function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedMode, setSelectedMode] = useState<TransformMode>(MODE_OPTIONS[0].key);
+  const [visibility, setVisibility] = useState<"public" | "private">("public");
   const [preview, setPreview] = useState<string>("");
   const [uploading, setUploading] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<{
@@ -191,9 +209,9 @@ function App() {
   const [avatarModalOpen, setAvatarModalOpen] = useState(false);
   const [availableAvatars, setAvailableAvatars] = useState<AvatarInfo[]>([]);
   const [viewingProfile, setViewingProfile] = useState<UserProfile | null>(null); // Başkasının profilini görüntüleme
-  const [viewingProfileStats, setViewingProfileStats] = useState<{followers: number, following: number} | null>(null);
+  const [viewingProfileStats, setViewingProfileStats] = useState<{ followers: number, following: number } | null>(null);
   const [isFollowing, setIsFollowing] = useState<boolean>(false);
-  const [followersModal, setFollowersModal] = useState<{type: 'followers' | 'following', userId: number} | null>(null);
+  const [followersModal, setFollowersModal] = useState<{ type: 'followers' | 'following', userId: number } | null>(null);
   const [followersList, setFollowersList] = useState<UserProfile[]>([]);
   const [followingList, setFollowingList] = useState<UserProfile[]>([]);
   const [activePage, setActivePage] = useState<'home' | 'search' | 'discover'>('home');
@@ -207,8 +225,8 @@ function App() {
   // Comment modal state
   const [commentModalOpen, setCommentModalOpen] = useState(false);
   const [commentingItem, setCommentingItem] = useState<GalleryItem | null>(null);
-  const [predefinedComments, setPredefinedComments] = useState<string[]>([]);
-  const [viewingComments, setViewingComments] = useState<{item: GalleryItem, comments: Comment[]} | null>(null);
+  const [predefinedComments, setPredefinedComments] = useState<{ id: number; text: string }[]>([]);
+  const [viewingComments, setViewingComments] = useState<{ item: GalleryItem, comments: Comment[] } | null>(null);
   // Registration state
   const [showRegister, setShowRegister] = useState(false);
 
@@ -250,7 +268,7 @@ function App() {
     if (!currentUserId) return null;
     try {
       // Fetch user profile to get avatar name
-      const response = await axios.get(`${API_URL}/users/${currentUserId}`);
+      const response = await api.get(`${API_URL}/users/${currentUserId}`);
       const avatarName = response.data.avatar_name;
       if (avatarName) {
         setUserAvatarName(avatarName);
@@ -278,7 +296,7 @@ function App() {
   React.useEffect(() => {
     const loadAvatars = async () => {
       try {
-        const response = await axios.get<AvatarInfo[]>(`${API_URL}/avatars`);
+        const response = await api.get<AvatarInfo[]>(`${API_URL}/avatars`);
         setAvailableAvatars(response.data);
       } catch (error) {
         console.error('Error loading avatars:', error);
@@ -309,7 +327,7 @@ function App() {
     }
 
     try {
-      await axios.put(`${API_URL}/users/${currentUserId}/avatar`, null, {
+      await api.put(`${API_URL}/users/${currentUserId}/avatar`, null, {
         params: { avatar_name: avatarName }
       });
       setUserAvatarName(avatarName);
@@ -332,19 +350,19 @@ function App() {
   React.useEffect(() => {
     if (viewingProfile) {
       // Fetch follow stats
-      axios.get(`${API_URL}/users/${viewingProfile.id}/follow-stats`)
+      api.get(`${API_URL}/users/${viewingProfile.id}/follow-stats`)
         .then(response => {
           setViewingProfileStats(response.data);
         })
         .catch(error => {
           console.error('Error fetching follow stats:', error);
-          setViewingProfileStats({followers: 0, following: 0});
+          setViewingProfileStats({ followers: 0, following: 0 });
         });
 
       // Check if current user is following this profile
       const currentUserId = getCurrentUserId();
       if (currentUserId) {
-        axios.get(`${API_URL}/users/${currentUserId}/is-following/${viewingProfile.id}`)
+        api.get(`${API_URL}/users/${currentUserId}/is-following/${viewingProfile.id}`)
           .then(response => {
             setIsFollowing(response.data.is_following);
           })
@@ -364,7 +382,7 @@ function App() {
     if (!viewingProfile && currentUser) {
       const currentUserId = getCurrentUserId();
       if (currentUserId) {
-        axios.get(`${API_URL}/users/${currentUserId}/follow-stats`)
+        api.get(`${API_URL}/users/${currentUserId}/follow-stats`)
           .then(response => {
             setUserFollowers(response.data.followers);
             setUserFollowing(response.data.following);
@@ -379,13 +397,13 @@ function App() {
   }, [viewingProfile, currentUser, getCurrentUserId]);
 
   // Load gallery from localStorage on component mount
-// YENİ: Profil değiştiğinde veya ana sayfaya dönüldüğünde sunucudan resimleri çek
+  // YENİ: Profil değiştiğinde veya ana sayfaya dönüldüğünde sunucudan resimleri çek
   React.useEffect(() => {
     const fetchBackendGallery = async () => {
       // Hangi kullanıcının galerisini göstereceğiz?
       // viewingProfile varsa (başkasının profili) onun ID'si, yoksa kendi ID'miz.
       let targetUserId: number | null = null;
-      
+
       if (viewingProfile) {
         targetUserId = viewingProfile.id;
       } else {
@@ -396,7 +414,7 @@ function App() {
 
       try {
         // Kullanıcı bilgilerini (ve postlarını) çek
-        const response = await axios.get<UserProfile>(`${API_URL}/users/${targetUserId}`);
+        const response = await api.get<UserProfile>(`${API_URL}/users/${targetUserId}`);
         // Backend'den gelen veriyi işle
         const userPosts = response.data.posts || [];
 
@@ -409,17 +427,18 @@ function App() {
           filename: post.original_filename || "AI Çizimi",
           originalFilename: post.original_filename || `post_${index}`,
           timestamp: Date.now(),
-          title: "Çizim", 
+          title: "Çizim",
           emoji: "🎨",
           likeCount: post.like_count || 0,
           isLiked: currentUserId ? (post.liked_by || []).includes(currentUserId) : false,
           mode: post.mode,
           commentCount: post.comment_count || 0,
           comments: post.comments || [],
+          visibility: post.visibility || 'public',
         }));
 
         setGallery(backendGallery);
-        
+
       } catch (error) {
         console.error("Galeri yüklenirken hata:", error);
       }
@@ -428,9 +447,9 @@ function App() {
     // Sadece "Profil" sayfasındaysak veya Ana sayfadaysak çalıştır
     // (Search sayfasında çalışıp durmasın)
     if (activePage === 'home' || currentView === 'profile') {
-        fetchBackendGallery();
+      fetchBackendGallery();
     }
-    
+
   }, [viewingProfile, currentUser, currentView, activePage, getCurrentUserId]);
 
   // Save gallery to localStorage whenever it changes
@@ -490,7 +509,7 @@ function App() {
 
     searchDelayRef.current = window.setTimeout(async () => {
       try {
-        const response = await axios.get<SearchApiResponse>(
+        const response = await api.get<SearchApiResponse>(
           `${API_URL}/users/search`,
           {
             params: { q: trimmedQuery },
@@ -584,7 +603,9 @@ function App() {
       return;
     }
 
-    // 1. Optimistic Update (Sonucu beklemeden ekranı güncelle - daha hızlı hissettirir)
+    const isLiked = item.isLiked;
+
+    // 1. Optimistic Update
     const oldGallery = [...gallery];
     setGallery(prev => prev.map(gItem => {
       if (gItem.id === item.id) {
@@ -599,18 +620,55 @@ function App() {
 
     try {
       // 2. Backend'e isteği gönder
-      await axios.post(`${API_URL}/posts/like`, {
-        filename: item.originalFilename, // ID olarak orijinal dosya adını kullanıyoruz
-        user_id: currentUserId
-      });
-      
-      // Backend zaten başarılı dönerse bir şey yapmaya gerek yok,
-      // Optimistic update zaten işi halletti.
+      if (isLiked) {
+        // Unlike
+        await api.delete(`${API_URL}/api/posts/${item.originalFilename}/like`);
+      } else {
+        // Like
+        await api.post(`${API_URL}/api/posts/${item.originalFilename}/like`, {});
+      }
+
     } catch (error) {
       // Hata olursa eski haline geri döndür (Rollback)
       console.error("Like hatası:", error);
       setGallery(oldGallery);
       setMessage({ type: "error", text: "Beğeni işlemi başarısız oldu." });
+    }
+  };
+
+
+
+  const handleToggleVisibility = async (item: GalleryItem) => {
+    const currentUserId = getCurrentUserId();
+    if (!currentUserId) return;
+
+    const newVisibility = item.visibility === 'public' ? 'private' : 'public';
+
+    // Optimistic Update
+    const oldGallery = [...gallery];
+    setGallery(prev => prev.map(gItem => {
+      if (gItem.id === item.id) {
+        return { ...gItem, visibility: newVisibility };
+      }
+      return gItem;
+    }));
+
+    try {
+      await api.patch(`${API_URL}/api/posts/${item.originalFilename}/visibility`, {
+        visibility: newVisibility
+      });
+
+      setMessage({
+        type: "success",
+        text: `✅ Görünürlük değiştirildi: ${newVisibility === 'public' ? 'Herkese Açık 🌍' : 'Gizli 🔒'}`
+      });
+    } catch (error: any) {
+      console.error("Visibility update error:", error);
+      setGallery(oldGallery); // Rollback
+      setMessage({
+        type: "error",
+        text: `❌ Görünürlük değiştirilemedi: ${error.response?.data?.detail || error.message}`
+      });
     }
   };
 
@@ -644,41 +702,47 @@ function App() {
 
     const formData = new FormData();
     formData.append("file", selectedFile);
-    formData.append("mode", selectedMode);
-    
-    // YENİ: Kullanıcı ID'sini ekle
-    const currentUserId = getCurrentUserId();
-    if (!currentUserId) {
-      setUploading(false);
-      setMessage({ type: "error", text: "Kullanıcı ID'si bulunamadı. Lütfen tekrar giriş yapın." });
-      return;
-    }
-    
-    formData.append("user_id", currentUserId.toString());
-    console.log("Uploading with user_id:", currentUserId);
+    // Note: user_id is extracted from JWT token by backend
+    // Note: mode is sent in the second step
 
     try {
-      const response = await axios.post<UploadResponse>(
-        `${API_URL}/upload/`,
+      // Step 1: Upload Original Image
+      const uploadResponse = await api.post<{ image_id: string; url: string }>(
+        `${API_URL}/api/uploads`,
         formData,
         {
           headers: {
-            "Content-Type": "multipart/form-data",
+            "Content-Type": undefined,
           },
+        }
+      );
+
+      const imageId = uploadResponse.data.image_id;
+      const originalUrl = uploadResponse.data.url;
+
+      setMessage({ type: "info", text: "AI dönüşümü yapılıyor..." });
+
+      // Step 2: Transform Image
+      const transformResponse = await api.post<{ post_id: string; ai_image_url: string; status: string }>(
+        `${API_URL}/api/ai/transform`,
+        {
+          image_id: imageId,
+          theme: selectedMode,
+          visibility: visibility,
         }
       );
 
       setMessage({
         type: "success",
-        text: `✅ Başarılı! "${response.data.original_filename}" dosyası ${MODE_LOOKUP[response.data.mode]?.label ?? response.data.mode} modunda işlendi ve galeriye eklendi!`,
+        text: `✅ Başarılı! Dosya ${MODE_LOOKUP[selectedMode]?.label ?? selectedMode} modunda işlendi ve galeriye eklendi!`,
       });
 
       // Set uploaded images for display
       const newImages = {
-        original: response.data.original_url,  // Full Cloudinary URL from backend
-        improved: response.data.improved_url,  // Full Cloudinary URL from backend
-        filename: response.data.original_filename,
-        mode: response.data.mode,
+        original: originalUrl,
+        improved: transformResponse.data.ai_image_url,
+        filename: selectedFile.name,
+        mode: selectedMode,
       };
       setUploadedImages(newImages);
 
@@ -688,19 +752,16 @@ function App() {
         original: newImages.original,
         improved: newImages.improved,
         filename: newImages.filename,
-        originalFilename: response.data.filename, // Store backend filename for deletion
+        originalFilename: imageId, // Store image_id for deletion
         timestamp: Date.now(),
-        
-        // EKSİK OLAN PARAMETRELER EKLENDİ:
-        likeCount: 0,     // Yeni resmin beğenisi 0 başlar
-        isLiked: false,   // Henüz kimse beğenmediği için false
-        mode: response.data.mode,
-        commentCount: 0,  // Yeni resmin yorumu 0 başlar
-        comments: [],     // Henüz yorum yok
-        
-        // (Opsiyonel) Başlık ve emoji varsayılanları da eklenebilir:
+        likeCount: 0,
+        isLiked: false,
+        mode: selectedMode,
+        commentCount: 0,
+        comments: [],
         title: "Çizim",
-        emoji: selectedModeMeta?.emoji ?? "🎨"
+        emoji: selectedModeMeta?.emoji ?? "🎨",
+        visibility: visibility
       };
       setGallery(prev => [newGalleryItem, ...prev]);
 
@@ -711,10 +772,20 @@ function App() {
         fileInputRef.current.value = "";
       }
     } catch (error: any) {
-      setMessage({
-        type: "error",
-        text: `❌ Hata: ${error.response?.data?.detail || error.message}`,
-      });
+      if (error.response?.status === 413) {
+        setMessage({
+          type: "error",
+          text: "❌ Dosya boyutu 10MB limitini aşıyor.",
+        });
+      } else {
+        setMessage({
+          type: "error",
+          text: `❌ Hata: ${typeof error.response?.data?.detail === "object"
+            ? JSON.stringify(error.response?.data?.detail)
+            : error.response?.data?.detail || error.message
+            }`,
+        });
+      }
     } finally {
       setUploading(false);
     }
@@ -756,12 +827,12 @@ function App() {
     try {
       // Only call backend if we have the originalFilename
       if (item.originalFilename) {
-        await axios.delete(`${API_URL}/delete/${item.originalFilename}`);
+        await api.delete(`${API_URL}/delete/${item.originalFilename}`);
       }
-      
+
       // Remove from gallery (always remove from frontend)
       setGallery(prev => prev.filter(item => item.id !== id));
-      
+
       setMessage({
         type: "success",
         text: `✅ "${item.filename}" galeriden silindi.${item.originalFilename ? ' Sunucudan da silindi.' : ''}`,
@@ -783,20 +854,20 @@ function App() {
     try {
       // Delete files from backend (only for items that have originalFilename)
       const itemsWithFilename = gallery.filter(item => item.originalFilename);
-      const deletePromises = itemsWithFilename.map(item => 
-        axios.delete(`${API_URL}/delete/${item.originalFilename}`)
+      const deletePromises = itemsWithFilename.map(item =>
+        api.delete(`${API_URL}/delete/${item.originalFilename}`)
       );
-      
+
       if (deletePromises.length > 0) {
         await Promise.all(deletePromises);
       }
-      
+
       // Clear gallery (always clear frontend)
       setGallery([]);
-      
+
       const deletedCount = itemsWithFilename.length;
       const totalCount = gallery.length;
-      
+
       setMessage({
         type: "success",
         text: `✅ Tüm çizimler galeriden silindi.${deletedCount > 0 ? ` ${deletedCount}/${totalCount} sunucudan da silindi.` : ''}`,
@@ -827,8 +898,8 @@ function App() {
   const saveEdit = () => {
     if (!editingItem) return;
 
-    setGallery(prev => prev.map(item => 
-      item.id === editingItem.id 
+    setGallery(prev => prev.map(item =>
+      item.id === editingItem.id
         ? { ...item, title: editTitle.trim(), emoji: editEmoji }
         : item
     ));
@@ -844,17 +915,17 @@ function App() {
   React.useEffect(() => {
     const loadPredefinedComments = async () => {
       try {
-        const response = await axios.get<{ comments: string[] }>(`${API_URL}/comments/predefined`);
+        const response = await api.get<{ comments: { id: number; text: string }[] }>(`${API_URL}/api/presets`);
         setPredefinedComments(response.data.comments);
       } catch (error) {
         console.error('Error loading predefined comments:', error);
         // Fallback to default comments
         setPredefinedComments([
-          "Harika görünüyor! 🌟",
-          "Çok yeteneklisin! 👏",
-          "Bayıldım! 😍",
-          "Kullandığın renkler müthiş! 🎨",
-          "Çizimlerin çok gerçekçi! ✨"
+          { id: 1, text: "Harika görünüyor! 🌟" },
+          { id: 2, text: "Çok yeteneklisin! 👏" },
+          { id: 3, text: "Bayıldım! 😍" },
+          { id: 4, text: "Kullandığın renkler müthiş! 🎨" },
+          { id: 5, text: "Çizimlerin çok gerçekçi! ✨" }
         ]);
       }
     };
@@ -871,7 +942,7 @@ function App() {
     setCommentingItem(null);
   };
 
-  const handleAddComment = async (commentText: string) => {
+  const handleAddComment = async (presetId: number) => {
     const currentUserId = getCurrentUserId();
     if (!currentUserId || !commentingItem) {
       setMessage({ type: "error", text: "Yorum yapmak için giriş yapmalısınız!" });
@@ -879,10 +950,8 @@ function App() {
     }
 
     try {
-      const response = await axios.post<Comment>(`${API_URL}/posts/comment`, {
-        filename: commentingItem.originalFilename,
-        user_id: currentUserId,
-        comment_text: commentText
+      const response = await api.post<Comment>(`${API_URL}/api/posts/${commentingItem.originalFilename}/comment`, {
+        preset_id: presetId
       });
 
       // Update gallery with new comment
@@ -927,7 +996,7 @@ function App() {
     setSelectedUser(user);
   };
 
-const handleViewProfile = (user: UserProfile) => {
+  const handleViewProfile = (user: UserProfile) => {
     const currentUserId = getCurrentUserId();
     if (user.id === currentUserId) {
       setViewingProfile(null);
@@ -959,8 +1028,8 @@ const handleViewProfile = (user: UserProfile) => {
         });
         return;
       }
-      
-      await axios.post(`${API_URL}/users/${targetUserId}/follow`, null, {
+
+      await api.post(`${API_URL}/users/${targetUserId}/follow`, null, {
         params: { current_user_id: currentUserId }
       });
       setIsFollowing(true);
@@ -970,7 +1039,7 @@ const handleViewProfile = (user: UserProfile) => {
       });
       // Refresh stats
       if (viewingProfile) {
-        const response = await axios.get(`${API_URL}/users/${viewingProfile.id}/follow-stats`);
+        const response = await api.get(`${API_URL}/users/${viewingProfile.id}/follow-stats`);
         setViewingProfileStats(response.data);
       }
     } catch (error: any) {
@@ -992,8 +1061,8 @@ const handleViewProfile = (user: UserProfile) => {
         });
         return;
       }
-      
-      await axios.delete(`${API_URL}/users/${targetUserId}/follow`, {
+
+      await api.delete(`${API_URL}/users/${targetUserId}/follow`, {
         params: { current_user_id: currentUserId }
       });
       setIsFollowing(false);
@@ -1003,7 +1072,7 @@ const handleViewProfile = (user: UserProfile) => {
       });
       // Refresh stats
       if (viewingProfile) {
-        const response = await axios.get(`${API_URL}/users/${viewingProfile.id}/follow-stats`);
+        const response = await api.get(`${API_URL}/users/${viewingProfile.id}/follow-stats`);
         setViewingProfileStats(response.data);
       }
     } catch (error: any) {
@@ -1016,13 +1085,13 @@ const handleViewProfile = (user: UserProfile) => {
   };
 
   const handleOpenFollowersModal = async (userId: number, type: 'followers' | 'following') => {
-    setFollowersModal({type, userId});
+    setFollowersModal({ type, userId });
     try {
       if (type === 'followers') {
-        const response = await axios.get(`${API_URL}/users/${userId}/followers`);
+        const response = await api.get(`${API_URL}/users/${userId}/followers`);
         setFollowersList(response.data.followers);
       } else {
-        const response = await axios.get(`${API_URL}/users/${userId}/following`);
+        const response = await api.get(`${API_URL}/users/${userId}/following`);
         setFollowingList(response.data.following);
       }
     } catch (error: any) {
@@ -1051,46 +1120,46 @@ const handleViewProfile = (user: UserProfile) => {
     '🐵', '🐮', '🐷', '🐙', '🦑', '🐠', '🐟', '🐬', '🐳', '🦋',
     '🐛', '🐝', '🐞', '🦗', '🐢', '🐍', '🦎', '🦜', '🐦', '🐤',
     '🐥', '🐣', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🦌', '🐴',
-    
+
     // Very Popular - Art & Creative (perfect for drawings!)
     '🎨', '🖼️', '✏️', '🖍️', '🖌️', '🎭', '🎪', '🖋️', '📝', '🌟',
     '💫', '🌈', '🦄', '✨', '🎆', '🎇', '💎', '🔮', '🎊', '🎉',
     '🎈', '🎁', '🎀', '🎂', '🍰', '🧁', '🍭', '🍬', '🍫', '🍪',
-    
+
     // Very Popular - Nature & Weather
     '☀️', '🌙', '⭐', '🌠', '⛅', '🌈', '❄️', '💧', '🌊', '☁️',
     '🏠', '🌳', '🌺', '🌸', '🌻', '🌷', '🌹', '🌵', '🌲', '🌴',
     '🌱', '🌿', '🍀', '🌾', '🍄', '🌍', '🌎', '🌏', '🌕', '🌖',
-    
+
     // Popular - Hearts & Colors (child-friendly)
     '❤️', '💙', '💚', '💛', '🧡', '💜', '🖤', '🤍', '💖', '💝',
     '💕', '💞', '💓', '💗', '💘', '💟', '❣️', '🌺', '🌸', '🌼',
-    
+
     // Popular - Food & Treats
     '🍎', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🍈', '🍒', '🍑',
     '🍍', '🥝', '🍅', '🥕', '🌽', '🍞', '🧀', '🍕', '🌮', '🍔',
     '🍟', '🌭', '🥪', '🍗', '🍖', '🥓', '🍳', '🥞', '🧇', '🍯',
-    
+
     // Fun - Sports & Activities
     '⚽', '🏀', '🏈', '⚾', '🎾', '🏐', '🏉', '🎱', '🏓', '🏸',
     '🏒', '🏑', '🎯', '🏹', '🎣', '🏊', '🏄', '🏇', '🚴', '🏃',
     '🤸', '🤾', '🏋️', '🤽', '🥇', '🥈', '🥉', '🏅', '🏆', '🎖️',
-    
+
     // Fun - Music & Entertainment (no gambling)
     '🎵', '🎶', '🎤', '🎧', '🎸', '🎹', '🥁', '🎺', '🎷', '🎻',
     '🎬', '🎭', '🎪', '🎯', '🎲', '🃏', '🎴', '🀄', '🧸', '🎮',
     '🕹️', '📚', '📖', '📝', '✏️', '🖍️', '🖊️', '📐', '📏', '📌',
-    
+
     // Fun - Transportation & Objects
     '🚗', '🚕', '🚙', '🚌', '🚎', '🏎️', '🚓', '🚑', '🚒', '🚐',
     '🛻', '🚚', '🚛', '🚜', '🏍️', '🛵', '🚲', '🛴', '🛹', '🛼',
     '✈️', '🛩️', '🛫', '🛬', '🪂', '💺', '🚀', '🛸', '🚁', '🛶',
-    
+
     // Fun - Fantasy & Magic (friendly characters only)
     '🧚', '🧜', '🧞', '🧝', '🧙', '👸', '🤴', '🦸', '🦹', '🧙‍♀️',
     '🧙‍♂️', '🧚‍♀️', '🧚‍♂️', '🧜‍♀️', '🧜‍♂️', '🧞‍♀️', '🧞‍♂️', '🧝‍♀️', '🧝‍♂️', '🦸‍♀️',
     '🦸‍♂️', '🦹‍♀️', '🦹‍♂️', '👼', '🎅', '🤶', '🧑‍🎄', '🎄', '⛄', '🎃',
-    
+
     // Fun - Toys & Games (no gambling)
     '🧸', '🎯', '🎲', '🃏', '🎴', '🀄', '🪀', '🎮', '🕹️', '🪁',
     '🎏', '🎐', '🧩', '🪆', '🎎', '🎑', '🎍', '🎋', '🎊', '🎉',
@@ -1101,17 +1170,17 @@ const handleViewProfile = (user: UserProfile) => {
     if (showRegister) {
       return (
         <div className="App">
-          <Register 
-            onSuccess={handleLoginSuccess} 
+          <Register
+            onSuccess={handleLoginSuccess}
             onBackToLogin={() => setShowRegister(false)}
           />
         </div>
       );
     }
-    
+
     return (
       <div className="App">
-        <Login 
+        <Login
           onSuccess={handleLoginSuccess}
           onRegisterClick={() => setShowRegister(true)}
         />
@@ -1189,410 +1258,433 @@ const handleViewProfile = (user: UserProfile) => {
               </div>
 
               {currentView === 'upload' ? (
-                  <div className="content-wrapper">
-                    <div className="upload-section">
-                      <div
-                        className="upload-area"
-                        onDrop={handleDrop}
-                        onDragOver={handleDragOver}
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept="image/*"
-                          onChange={handleFileChange}
-                          style={{ display: "none" }}
-                        />
+                <div className="content-wrapper">
+                  <div className="upload-section">
+                    <div
+                      className="upload-area"
+                      onDrop={handleDrop}
+                      onDragOver={handleDragOver}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileChange}
+                        style={{ display: "none" }}
+                      />
 
-                        {!preview ? (
-                          <div className="upload-content">
-                            <div className="upload-icon">📁</div>
-                            <h3>Çiziminizi Seçin</h3>
-                            <p>Tıklayın veya sürükleyip bırakın</p>
-                            <button className="select-button">Dosya Seç</button>
-                          </div>
-                        ) : (
-                          <div className="preview-content">
-                            <img src={preview} alt="Preview" className="preview-image" />
-                            <div className="file-info">
-                              <p>
-                                <strong>Dosya:</strong> {selectedFile?.name}
-                              </p>
-                              <p>
-                                <strong>Boyut:</strong>{" "}
-                                {(selectedFile?.size! / 1024 / 1024).toFixed(2)} MB
-                              </p>
-                            </div>
-                            <button className="clear-button" onClick={clearFile}>
-                              ✕ Temizle
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="mode-selector">
-                        <div className="mode-selector-header">
-                          <h3>AI Dönüşüm Modu</h3>
-                          <p>Görselini hangi stilde görmek istersin?</p>
+                      {!preview ? (
+                        <div className="upload-content">
+                          <div className="upload-icon">📁</div>
+                          <h3>Çiziminizi Seçin</h3>
+                          <p>Tıklayın veya sürükleyip bırakın</p>
+                          <button className="select-button">Dosya Seç</button>
                         </div>
-                        <div className="mode-options">
-                          {MODE_OPTIONS.map((option) => {
-                            const isActive = option.key === selectedMode;
-                            return (
-                              <button
-                                key={option.key}
-                                type="button"
-                                className={`mode-option ${isActive ? 'active' : ''}`}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setSelectedMode(option.key);
-                                }}
-                                aria-pressed={isActive}
-                                disabled={uploading}
-                              >
-                                <span className="mode-option-emoji">{option.emoji}</span>
-                                <span className="mode-option-content">
-                                  <span className="mode-option-title">{option.label}</span>
-                                  <span className="mode-option-description">{option.description}</span>
-                                </span>
-                              </button>
-                            );
-                          })}
+                      ) : (
+                        <div className="preview-content">
+                          <img src={preview} alt="Preview" className="preview-image" />
+                          <div className="file-info">
+                            <p>
+                              <strong>Dosya:</strong> {selectedFile?.name}
+                            </p>
+                            <p>
+                              <strong>Boyut:</strong>{" "}
+                              {(selectedFile?.size! / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          </div>
+                          <button className="clear-button" onClick={clearFile}>
+                            ✕ Temizle
+                          </button>
                         </div>
-                      </div>
-
-                      {message && (
-                        <div className={`message ${message.type}`}>{message.text}</div>
                       )}
+                    </div>
 
-                      <button
-                        className="upload-button"
-                        onClick={handleUpload}
-                        disabled={!selectedFile || uploading}
+                    <div className="mode-selector">
+                      <div className="mode-selector-header">
+                        <h3>AI Dönüşüm Modu</h3>
+                        <p>Görselini hangi stilde görmek istersin?</p>
+                      </div>
+                      <div className="mode-options">
+                        {MODE_OPTIONS.map((option) => {
+                          const isActive = option.key === selectedMode;
+                          return (
+                            <button
+                              key={option.key}
+                              type="button"
+                              className={`mode-option ${isActive ? 'active' : ''}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setSelectedMode(option.key);
+                              }}
+                              aria-pressed={isActive}
+                              disabled={uploading}
+                            >
+                              <span className="mode-option-emoji">{option.emoji}</span>
+                              <span className="mode-option-content">
+                                <span className="mode-option-title">{option.label}</span>
+                                <span className="mode-option-description">{option.description}</span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="mode-selector">
+                      <label>Görünürlük:</label>
+                      <select
+                        value={visibility}
+                        onChange={(e) => setVisibility(e.target.value as "public" | "private")}
+                        className="mode-select"
+                        style={{ marginLeft: '10px', padding: '5px' }}
                       >
-                        {uploading
-                          ? `⏳ ${selectedModeMeta?.label ?? 'AI'} modu çalışıyor...`
-                          : `🚀 ${selectedModeMeta?.label ?? 'AI'} Modu ile Dönüştür`}
+                        <option value="public">🌍 Herkese Açık</option>
+                        <option value="private">🔒 Sadece Ben</option>
+                      </select>
+                    </div>
+
+                    {message && (
+                      <div className={`message ${message.type}`}>{message.text}</div>
+                    )}
+
+                    <button
+                      className="upload-button"
+                      onClick={handleUpload}
+                      disabled={!selectedFile || uploading}
+                    >
+                      {uploading
+                        ? `⏳ ${selectedModeMeta?.label ?? 'AI'} modu çalışıyor...`
+                        : `🚀 ${selectedModeMeta?.label ?? 'AI'} Modu ile Dönüştür`}
+                    </button>
+                  </div>
+
+                  {/* Results Section */}
+                  {uploadedImages && (
+                    <div className="results-section">
+                      <h2>🎨 Sonuçlar</h2>
+                      {uploadedImages.mode && (
+                        <div className="selected-mode-pill">
+                          <span className="selected-mode-emoji">
+                            {MODE_LOOKUP[uploadedImages.mode]?.emoji || '✨'}
+                          </span>
+                          <span className="selected-mode-label">
+                            {(MODE_LOOKUP[uploadedImages.mode]?.label || uploadedImages.mode) + ' modu'}
+                          </span>
+                        </div>
+                      )}
+                      <div className="image-comparison">
+                        <div className="image-container">
+                          <h3>Orijinal Çizim</h3>
+                          <div className="image-wrapper" onClick={() => openMagnifiedView(uploadedImages.original, uploadedImages.improved, uploadedImages.filename, uploadedImages.filename, undefined, uploadedImages.mode)}>
+                            <img
+                              src={uploadedImages.original}
+                              alt="Orijinal çizim"
+                              className="result-image"
+                            />
+                            <div className="magnify-overlay">
+                              <span className="magnify-icon">🔍</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="vs-divider">
+                          <span>VS</span>
+                        </div>
+                        <div className="image-container">
+                          <h3>AI ile Geliştirilmiş</h3>
+                          <div className="image-wrapper" onClick={() => openMagnifiedView(uploadedImages.original, uploadedImages.improved, uploadedImages.filename, uploadedImages.filename, undefined, uploadedImages.mode)}>
+                            <img
+                              src={uploadedImages.improved}
+                              alt="Geliştirilmiş çizim"
+                              className="result-image"
+                            />
+                            <div className="magnify-overlay">
+                              <span className="magnify-icon">🔍</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <button className="clear-results-button" onClick={clearResults}>
+                        ✕ Sonuçları Temizle
                       </button>
                     </div>
-
-                    {/* Results Section */}
-                    {uploadedImages && (
-                      <div className="results-section">
-                        <h2>🎨 Sonuçlar</h2>
-                        {uploadedImages.mode && (
-                          <div className="selected-mode-pill">
-                            <span className="selected-mode-emoji">
-                              {MODE_LOOKUP[uploadedImages.mode]?.emoji || '✨'}
-                            </span>
-                            <span className="selected-mode-label">
-                              {(MODE_LOOKUP[uploadedImages.mode]?.label || uploadedImages.mode) + ' modu'}
-                            </span>
-                          </div>
-                        )}
-                        <div className="image-comparison">
-                          <div className="image-container">
-                            <h3>Orijinal Çizim</h3>
-                            <div className="image-wrapper" onClick={() => openMagnifiedView(uploadedImages.original, uploadedImages.improved, uploadedImages.filename, uploadedImages.filename, undefined, uploadedImages.mode)}>
-                              <img
-                                src={uploadedImages.original}
-                                alt="Orijinal çizim"
-                                className="result-image"
-                              />
-                              <div className="magnify-overlay">
-                                <span className="magnify-icon">🔍</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="vs-divider">
-                            <span>VS</span>
-                          </div>
-                          <div className="image-container">
-                            <h3>AI ile Geliştirilmiş</h3>
-                            <div className="image-wrapper" onClick={() => openMagnifiedView(uploadedImages.original, uploadedImages.improved, uploadedImages.filename, uploadedImages.filename, undefined, uploadedImages.mode)}>
-                              <img
-                                src={uploadedImages.improved}
-                                alt="Geliştirilmiş çizim"
-                                className="result-image"
-                              />
-                              <div className="magnify-overlay">
-                                <span className="magnify-icon">🔍</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <button className="clear-results-button" onClick={clearResults}>
-                          ✕ Sonuçları Temizle
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="profile-section">
-                    {/* Back to my profile button if viewing someone else's profile */}
-                    {viewingProfile && (
-                      <div className="profile-back-section">
-                        <button className="back-to-profile-button" onClick={handleBackToMyProfile}>
-                          ← Kendi Profilime Dön
-                        </button>
-                      </div>
-                    )}
-                    
-                    {/* Profile Header */}
-                    <div className="profile-header-section">
-                      <div className="profile-avatar-container">
-                        {viewingProfile ? (
-                          // Başkasının profili - avatar gösterimi
-                          <>
-                            {viewingProfile.avatar_name ? (
-                              <img 
-                                src={`${API_URL}/avatars/${viewingProfile.avatar_name}`} 
-                                alt={`${viewingProfile.displayName} Avatarı`} 
-                                className="profile-avatar" 
-                                onError={(e) => {
-                                  // If image fails to load, hide image and show placeholder
-                                  const target = e.target as HTMLImageElement;
-                                  target.style.display = 'none';
-                                }}
-                              />
-                            ) : null}
-                            {!viewingProfile.avatar_name && (
-                              <div className="profile-avatar-placeholder">
-                                <span className="avatar-emoji">👤</span>
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          // Kendi profili
-                          <>
-                            {userAvatar ? (
-                              <img 
-                                src={userAvatar} 
-                                alt="Profil Avatarı" 
-                                className="profile-avatar"
-                                onError={(e) => {
-                                  // If image fails to load, hide image and show placeholder
-                                  const target = e.target as HTMLImageElement;
-                                  target.style.display = 'none';
-                                  setUserAvatar(null);
-                                }}
-                              />
-                            ) : null}
-                            {!userAvatar && (
-                              <div className="profile-avatar-placeholder">
-                                <span className="avatar-emoji">👤</span>
-                              </div>
-                            )}
-                            {/* Avatar selection button */}
-                            <button 
-                              className="avatar-upload-button" 
-                              title="Avatar seç"
-                              onClick={handleOpenAvatarModal}
-                            >
-                              📷
-                            </button>
-                          </>
-                        )}
-                      </div>
-                      <div className="profile-info">
-                        <h2 className="profile-name">
-                          @{viewingProfile ? viewingProfile.username : (currentUser || 'misafir')}
-                        </h2>
-                        {viewingProfile && (
-                          <p className="profile-display-name">{viewingProfile.displayName}</p>
-                        )}
-                        <div className="profile-stats">
-                          <div className="profile-stat">
-                            <span className="stat-number">{gallery.length}</span>
-                            <span className="stat-label">Çizim</span>
-                          </div>
-                          <div 
-                            className="profile-stat clickable-stat"
-                            onClick={() => {
-                              const userId = viewingProfile ? viewingProfile.id : getCurrentUserId();
-                              if (userId) {
-                                handleOpenFollowersModal(userId, 'followers');
-                              }
-                            }}
-                            title="Takipçileri görüntüle"
-                          >
-                            <span className="stat-number">
-                              {viewingProfile ? (viewingProfileStats?.followers || 0) : userFollowers}
-                            </span>
-                            <span className="stat-label">Takipçi</span>
-                          </div>
-                          <div 
-                            className="profile-stat clickable-stat"
-                            onClick={() => {
-                              const userId = viewingProfile ? viewingProfile.id : getCurrentUserId();
-                              if (userId) {
-                                handleOpenFollowersModal(userId, 'following');
-                              }
-                            }}
-                            title="Takip edilenleri görüntüle"
-                          >
-                            <span className="stat-number">
-                              {viewingProfile ? (viewingProfileStats?.following || 0) : userFollowing}
-                            </span>
-                            <span className="stat-label">Takip Edilen</span>
-                          </div>
-                        </div>
-                        <div className="profile-bio">
-                          <p>{viewingProfile ? viewingProfile.bio : userBio}</p>
-                          {!viewingProfile && (
-                            <button className="edit-bio-button" title="Biyografi düzenle (yakında)">
-                              ✏️
-                            </button>
-                          )}
-                        </div>
-                        {viewingProfile && (
-                          <div className="profile-follow-section">
-                            {isFollowing ? (
-                              <button 
-                                className="unfollow-button"
-                                onClick={() => handleUnfollow(viewingProfile.id)}
-                              >
-                                ✓ Takip Ediliyor
-                              </button>
-                            ) : (
-                              <button 
-                                className="follow-button"
-                                onClick={() => handleFollow(viewingProfile.id)}
-                              >
-                                + Takip Et
-                              </button>
-                            )}
-                          </div>
-                        )}
-                        {viewingProfile && viewingProfile.interests && viewingProfile.interests.length > 0 && (
-                          <div className="profile-interests">
-                            <h4>İlgi Alanları:</h4>
-                            <div className="profile-tags">
-                              {viewingProfile.interests.map((interest) => (
-                                <span key={interest} className="profile-tag">
-                                  #{interest}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                  )}
+                </div>
+              ) : (
+                <div className="profile-section">
+                  {/* Back to my profile button if viewing someone else's profile */}
+                  {viewingProfile && (
+                    <div className="profile-back-section">
+                      <button className="back-to-profile-button" onClick={handleBackToMyProfile}>
+                        ← Kendi Profilime Dön
+                      </button>
                     </div>
+                  )}
 
-
-                    {/* Gallery Section */}
-                    <div className="profile-gallery-section">
-                      <div className="profile-gallery-header">
-                        <h2>🖼️ {viewingProfile ? `${viewingProfile.displayName}'nin Galerisi` : 'Sanat Galerim'}</h2>
-                        <p>AI ile geliştirilmiş çizimlerin koleksiyonu</p>
-                        {!viewingProfile && gallery.length > 0 && (
-                          <button className="clear-gallery-button" onClick={clearGallery}>
-                            🗑️ Galeriyi Temizle
+                  {/* Profile Header */}
+                  <div className="profile-header-section">
+                    <div className="profile-avatar-container">
+                      {viewingProfile ? (
+                        // Başkasının profili - avatar gösterimi
+                        <>
+                          {viewingProfile.avatar_name ? (
+                            <img
+                              src={`${API_URL}/avatars/${viewingProfile.avatar_name}`}
+                              alt={`${viewingProfile.displayName} Avatarı`}
+                              className="profile-avatar"
+                              onError={(e) => {
+                                // If image fails to load, hide image and show placeholder
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                              }}
+                            />
+                          ) : null}
+                          {!viewingProfile.avatar_name && (
+                            <div className="profile-avatar-placeholder">
+                              <span className="avatar-emoji">👤</span>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        // Kendi profili
+                        <>
+                          {userAvatar ? (
+                            <img
+                              src={userAvatar}
+                              alt="Profil Avatarı"
+                              className="profile-avatar"
+                              onError={(e) => {
+                                // If image fails to load, hide image and show placeholder
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                                setUserAvatar(null);
+                              }}
+                            />
+                          ) : null}
+                          {!userAvatar && (
+                            <div className="profile-avatar-placeholder">
+                              <span className="avatar-emoji">👤</span>
+                            </div>
+                          )}
+                          {/* Avatar selection button */}
+                          <button
+                            className="avatar-upload-button"
+                            title="Avatar seç"
+                            onClick={handleOpenAvatarModal}
+                          >
+                            📷
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    <div className="profile-info">
+                      <h2 className="profile-name">
+                        @{viewingProfile ? viewingProfile.username : (currentUser || 'misafir')}
+                      </h2>
+                      {viewingProfile && (
+                        <p className="profile-display-name">{viewingProfile.displayName}</p>
+                      )}
+                      <div className="profile-stats">
+                        <div className="profile-stat">
+                          <span className="stat-number">{gallery.length}</span>
+                          <span className="stat-label">Çizim</span>
+                        </div>
+                        <div
+                          className="profile-stat clickable-stat"
+                          onClick={() => {
+                            const userId = viewingProfile ? viewingProfile.id : getCurrentUserId();
+                            if (userId) {
+                              handleOpenFollowersModal(userId, 'followers');
+                            }
+                          }}
+                          title="Takipçileri görüntüle"
+                        >
+                          <span className="stat-number">
+                            {viewingProfile ? (viewingProfileStats?.followers || 0) : userFollowers}
+                          </span>
+                          <span className="stat-label">Takipçi</span>
+                        </div>
+                        <div
+                          className="profile-stat clickable-stat"
+                          onClick={() => {
+                            const userId = viewingProfile ? viewingProfile.id : getCurrentUserId();
+                            if (userId) {
+                              handleOpenFollowersModal(userId, 'following');
+                            }
+                          }}
+                          title="Takip edilenleri görüntüle"
+                        >
+                          <span className="stat-number">
+                            {viewingProfile ? (viewingProfileStats?.following || 0) : userFollowing}
+                          </span>
+                          <span className="stat-label">Takip Edilen</span>
+                        </div>
+                      </div>
+                      <div className="profile-bio">
+                        <p>{viewingProfile ? viewingProfile.bio : userBio}</p>
+                        {!viewingProfile && (
+                          <button className="edit-bio-button" title="Biyografi düzenle (yakında)">
+                            ✏️
                           </button>
                         )}
                       </div>
-                      {gallery.length === 0 ? (
-                        <div className="empty-gallery">
-                          <div className="empty-icon">🎨</div>
-                          <h3>{viewingProfile ? 'Henüz çizim yok!' : 'Henüz çizim yok!'}</h3>
-                          <p>{viewingProfile ? 'Bu kullanıcı henüz çizim paylaşmamış.' : 'İlk çiziminizi yükleyip AI ile geliştirin'}</p>
-                          {!viewingProfile && (
-                            <button className="upload-first-button" onClick={() => setCurrentView('upload')}>
-                              📤 İlk Çizimi Yükle
+                      {viewingProfile && (
+                        <div className="profile-follow-section">
+                          {isFollowing ? (
+                            <button
+                              className="unfollow-button"
+                              onClick={() => handleUnfollow(viewingProfile.id)}
+                            >
+                              ✓ Takip Ediliyor
+                            </button>
+                          ) : (
+                            <button
+                              className="follow-button"
+                              onClick={() => handleFollow(viewingProfile.id)}
+                            >
+                              + Takip Et
                             </button>
                           )}
                         </div>
-                      ) : (
-                        <div className="photo-gallery">
-                          {gallery.map((item) => (
-                            <div key={item.id} className="photo-item">
-                              <div className="photo-header">
-                                <div className="photo-title">
-                                  <span className="photo-emoji">{item.emoji || '🎨'}</span>
-                                  <span className="photo-title-text">
-                                    {item.title || item.filename}
+                      )}
+                      {viewingProfile && viewingProfile.interests && viewingProfile.interests.length > 0 && (
+                        <div className="profile-interests">
+                          <h4>İlgi Alanları:</h4>
+                          <div className="profile-tags">
+                            {viewingProfile.interests.map((interest) => (
+                              <span key={interest} className="profile-tag">
+                                #{interest}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+
+                  {/* Gallery Section */}
+                  <div className="profile-gallery-section">
+                    <div className="profile-gallery-header">
+                      <h2>🖼️ {viewingProfile ? `${viewingProfile.displayName}'nin Galerisi` : 'Sanat Galerim'}</h2>
+                      <p>AI ile geliştirilmiş çizimlerin koleksiyonu</p>
+                      {!viewingProfile && gallery.length > 0 && (
+                        <button className="clear-gallery-button" onClick={clearGallery}>
+                          🗑️ Galeriyi Temizle
+                        </button>
+                      )}
+                    </div>
+                    {gallery.length === 0 ? (
+                      <div className="empty-gallery">
+                        <div className="empty-icon">🎨</div>
+                        <h3>{viewingProfile ? 'Henüz çizim yok!' : 'Henüz çizim yok!'}</h3>
+                        <p>{viewingProfile ? 'Bu kullanıcı henüz çizim paylaşmamış.' : 'İlk çiziminizi yükleyip AI ile geliştirin'}</p>
+                        {!viewingProfile && (
+                          <button className="upload-first-button" onClick={() => setCurrentView('upload')}>
+                            📤 İlk Çizimi Yükle
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="photo-gallery">
+                        {gallery.map((item) => (
+                          <div key={item.id} className="photo-item">
+                            <div className="photo-header">
+                              <div className="photo-title">
+                                <span className="photo-emoji">{item.emoji || '🎨'}</span>
+                                <span className="photo-title-text">
+                                  {item.title || item.filename}
+                                </span>
+                                {item.mode && (
+                                  <span className="mode-badge">
+                                    <span className="mode-badge-emoji">{MODE_LOOKUP[item.mode]?.emoji || '✨'}</span>
+                                    <span className="mode-badge-label">{MODE_LOOKUP[item.mode]?.label || item.mode}</span>
                                   </span>
-                                  {item.mode && (
-                                    <span className="mode-badge">
-                                      <span className="mode-badge-emoji">{MODE_LOOKUP[item.mode]?.emoji || '✨'}</span>
-                                      <span className="mode-badge-label">{MODE_LOOKUP[item.mode]?.label || item.mode}</span>
-                                    </span>
-                                  )}
-                                </div>
-                                <button 
+                                )}
+                              </div>
+                              <button
                                 className={`like-button ${item.isLiked ? 'liked' : ''}`}
                                 onClick={(e) => {
                                   e.stopPropagation(); // Resmin büyümesini engelle
                                   handleToggleLike(item);
                                 }}
                                 title={item.isLiked ? "Beğenmekten vazgeç" : "Beğen"}
-                               >
+                              >
                                 <span className="like-icon">{item.isLiked ? '❤️' : '🤍'}</span>
                                 <span className="like-count">{item.likeCount}</span>
-                               </button>
-                               <button 
+                              </button>
+                              <button
                                 className="comment-button"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   openCommentModal(item);
                                 }}
                                 title="Yorum yap"
-                               >
+                              >
                                 <span className="comment-icon">💬</span>
                                 <span className="comment-count">{item.commentCount}</span>
-                               </button>
-                               {item.commentCount > 0 && (
-                                 <button 
-                                   className="view-comments-button"
-                                   onClick={(e) => {
-                                     e.stopPropagation();
-                                     openViewComments(item);
-                                   }}
-                                   title="Yorumları gör"
-                                 >
-                                   👁️
-                                 </button>
-                               )}
-                                {!viewingProfile && (
-                                  <div className="photo-actions">
-                                    <button
-                                      className="edit-photo-button"
-                                      onClick={() => openEditModal(item)}
-                                      title="Başlık ve emoji düzenle"
-                                    >
-                                      ✏️
-                                    </button>
-                                    <button
-                                      className="remove-photo-button"
-                                      onClick={() => removeFromGallery(item.id)}
-                                      title="Galeriden kaldır"
-                                    >
-                                      🗑️
-                                    </button>
-                                  </div>
-                                )}
+                              </button>
+                              {item.commentCount > 0 && (
+                                <button
+                                  className="view-comments-button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openViewComments(item);
+                                  }}
+                                  title="Yorumları gör"
+                                >
+                                  👁️
+                                </button>
+                              )}
+                              {!viewingProfile && (
+                                <div className="photo-actions">
+                                  <button
+                                    className="visibility-button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleToggleVisibility(item);
+                                    }}
+                                    title={item.visibility === 'private' ? "Gizli (Herkese Aç Yap)" : "Herkese Aç (Gizle)"}
+                                  >
+                                    {item.visibility === 'private' ? '🔒' : '🌍'}
+                                  </button>
+                                  <button
+                                    className="edit-photo-button"
+                                    onClick={() => openEditModal(item)}
+                                    title="Başlık ve emoji düzenle"
+                                  >
+                                    ✏️
+                                  </button>
+                                  <button
+                                    className="remove-photo-button"
+                                    onClick={() => removeFromGallery(item.id)}
+                                    title="Galeriden kaldır"
+                                  >
+                                    🗑️
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            <div className="photo-comparison" onClick={() => openMagnifiedView(item.original, item.improved, item.filename, item.title, item.emoji, item.mode)}>
+                              <div className="photo-original">
+                                <img src={item.original} alt="Orijinal" className="photo-image" />
+                                <span className="photo-label">Orijinal</span>
                               </div>
-                              <div className="photo-comparison" onClick={() => openMagnifiedView(item.original, item.improved, item.filename, item.title, item.emoji, item.mode)}>
-                                <div className="photo-original">
-                                  <img src={item.original} alt="Orijinal" className="photo-image" />
-                                  <span className="photo-label">Orijinal</span>
-                                </div>
-                                <div className="photo-improved">
-                                  <img src={item.improved} alt="AI Geliştirilmiş" className="photo-image" />
-                                  <span className="photo-label">AI Geliştirilmiş</span>
-                                </div>
-                                <div className="photo-overlay">
-                                  <span className="magnify-icon">🔍</span>
-                                </div>
+                              <div className="photo-improved">
+                                <img src={item.improved} alt="AI Geliştirilmiş" className="photo-image" />
+                                <span className="photo-label">AI Geliştirilmiş</span>
+                              </div>
+                              <div className="photo-overlay">
+                                <span className="magnify-icon">🔍</span>
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
+              )}
             </section>
           )}
 
@@ -1682,8 +1774,8 @@ const handleViewProfile = (user: UserProfile) => {
                         </div>
                       )}
                       <div className="profile-actions">
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           className="add-friend-button"
                           onClick={() => handleViewProfile(selectedUser)}
                         >
@@ -1740,10 +1832,10 @@ const handleViewProfile = (user: UserProfile) => {
                     {magnifiedImages.mode && (
                       <>
                         {' '}
-                      <span className="modal-mode-pill">
-                        {MODE_LOOKUP[magnifiedImages.mode]?.emoji || "✨"}
-                        {MODE_LOOKUP[magnifiedImages.mode]?.label || magnifiedImages.mode}
-                      </span>
+                        <span className="modal-mode-pill">
+                          {MODE_LOOKUP[magnifiedImages.mode]?.emoji || "✨"}
+                          {MODE_LOOKUP[magnifiedImages.mode]?.label || magnifiedImages.mode}
+                        </span>
                       </>
                     )}
                   </p>
@@ -1840,8 +1932,8 @@ const handleViewProfile = (user: UserProfile) => {
                       onClick={() => handleSelectAvatar(avatar.name)}
                       title={avatar.name}
                     >
-                      <img 
-                        src={`${API_URL}${avatar.url}`} 
+                      <img
+                        src={`${API_URL}${avatar.url}`}
                         alt={avatar.name}
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
@@ -1921,13 +2013,13 @@ const handleViewProfile = (user: UserProfile) => {
               <h3>Yorum Yap</h3>
               <p className="comment-modal-subtitle">Aşağıdaki yorumlardan birini seçin:</p>
               <div className="predefined-comments">
-                {predefinedComments.map((comment, index) => (
+                {predefinedComments.map((comment) => (
                   <button
-                    key={index}
+                    key={comment.id}
                     className="comment-option"
-                    onClick={() => handleAddComment(comment)}
+                    onClick={() => handleAddComment(comment.id)}
                   >
-                    {comment}
+                    {comment.text}
                   </button>
                 ))}
               </div>
@@ -1954,15 +2046,15 @@ const handleViewProfile = (user: UserProfile) => {
                     <div key={comment.id} className="comment-item">
                       <div className="comment-header">
                         {comment.avatar_name ? (
-                          <img 
-                            src={`${API_URL}/avatars/${comment.avatar_name}`} 
+                          <img
+                            src={`${API_URL}/avatars/${comment.avatar_name}`}
                             alt={comment.displayName}
                             className="comment-avatar"
                           />
                         ) : (
                           <div className="comment-avatar-placeholder">
-                            {comment.displayName && typeof comment.displayName === 'string' 
-                              ? comment.displayName.charAt(0).toUpperCase() 
+                            {comment.displayName && typeof comment.displayName === 'string'
+                              ? comment.displayName.charAt(0).toUpperCase()
                               : '?'}
                           </div>
                         )}
