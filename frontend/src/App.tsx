@@ -71,7 +71,7 @@ const MODE_OPTIONS: TransformModeOption[] = [
   {
     key: "space",
     label: "🚀 Space Adventure",
-    description: "Space theme",
+    description: "Uzay temalı bir macera.",
     emoji: "🪐",
   },
 ];
@@ -193,7 +193,11 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   // Profile state
-  const [userBio] = useState<string>('Çocuklar için AI destekli sanat platformunda çizimlerimi paylaşıyorum! 🎨');
+  const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
+  // Profile state
+  const [bioModalOpen, setBioModalOpen] = useState(false);
+  const [predefinedBios, setPredefinedBios] = useState<{ id: number; text: string }[]>([]);
+  const [selectedBioId, setSelectedBioId] = useState<number | null>(null);
   const [userFollowers, setUserFollowers] = useState<number>(0);
   const [userFollowing, setUserFollowing] = useState<number>(0);
   const [userAvatar, setUserAvatar] = useState<string | null>(null); // Current user's avatar URL
@@ -229,16 +233,16 @@ function App() {
   // Helper function to add Turkish possessive suffix
   const addTurkishPossessive = (name: string): string => {
     if (!name || name.length === 0) return name;
-  
+
     // İsimden kesme işaretini ayır (Eğer varsa temizleyelim)
     const cleanName = name.replace(/'/g, "");
-    
+
     // Son harfi al
     const lastChar = cleanName[cleanName.length - 1].toLowerCase();
-    
+
     // Türkçe sesli harfler
     const vowels = ['a', 'e', 'ı', 'i', 'o', 'ö', 'u', 'ü'];
-    
+
     // İsim içindeki son sesli harfi bulmamız gerekiyor (Ünlü uyumu için)
     // İsmi tersten tarayıp ilk karşılaştığımız sesli harfi alacağız
     let lastVowel = '';
@@ -249,15 +253,15 @@ function App() {
         break;
       }
     }
-  
+
     // Eğer isimde hiç sesli harf yoksa (örn: "Sky") varsayılan olarak ince 'i' varmış gibi davranabiliriz 
     // ya da son harfin okunuşuna göre (Yabancı isimler) bir mantık kurmak gerekir. 
     // Şimdilik varsayılanı 'e/i' grubu kabul edelim.
     if (!lastVowel) lastVowel = 'e';
-  
+
     // Ek belirleme mantığı (4'lü uyum kuralı: ı/i/u/ü)
     let suffixVowel = '';
-    
+
     // Kalınlık-Incelik ve Düzlük-Yuvarlaklık kuralları
     if (['a', 'ı'].includes(lastVowel)) {
       suffixVowel = 'ı';
@@ -268,7 +272,7 @@ function App() {
     } else if (['ö', 'ü'].includes(lastVowel)) {
       suffixVowel = 'ü';
     }
-  
+
     // Son harf sesli mi? (Kaynaştırma harfi 'n' gerekir mi?)
     if (vowels.includes(lastChar)) {
       return `${name}'n${suffixVowel}n`; // Ali -> Ali'nin, Esra -> Esra'nın
@@ -276,7 +280,7 @@ function App() {
       return `${name}'${suffixVowel}n`;  // Ahmet -> Ahmet'in, Yusuf -> Yusuf'un
     }
   };
-  
+
   React.useEffect(() => {
     const storedAuth = localStorage.getItem('hayai-auth');
     if (storedAuth) {
@@ -286,11 +290,32 @@ function App() {
           setIsAuthenticated(true);
           setCurrentUser(parsed.username);
           setActivePage('home');
+
+          // Fetch full profile
+          const storedUserId = localStorage.getItem("userId");
+          if (storedUserId) {
+            api.get(`${API_URL}/users/${storedUserId}`)
+              .then(res => setCurrentUserProfile(res.data))
+              .catch(err => console.error("Error fetching current user profile:", err));
+          }
         }
       } catch (error) {
         console.error('Error loading auth state:', error);
       }
     }
+  }, []);
+
+  // Load predefined bios
+  React.useEffect(() => {
+    const loadPredefinedBios = async () => {
+      try {
+        const response = await api.get<{ bios: { id: number; text: string }[] }>(`${API_URL}/api/presets/bios`);
+        setPredefinedBios(response.data.bios);
+      } catch (error) {
+        console.error('Error loading predefined bios:', error);
+      }
+    };
+    loadPredefinedBios();
   }, []);
 
   // Get current user ID from localStorage (set during login)
@@ -599,6 +624,40 @@ function App() {
     };
   }, [searchQuery, activePage]);
 
+  const handleUpdateBio = async () => {
+    const currentUserId = getCurrentUserId();
+    if (!currentUserId || !selectedBioId) return;
+
+    try {
+      const response = await api.put(`${API_URL}/users/${currentUserId}/bio`, null, {
+        params: { bio_preset_id: selectedBioId }
+      });
+
+      // Update local profile state
+      if (currentUserProfile) {
+        setCurrentUserProfile({
+          ...currentUserProfile,
+          bio: response.data.bio
+        });
+      }
+
+      setBioModalOpen(false);
+      // Clear search results to force re-fetch if user goes back to search
+      setSearchResults([]);
+      setSearchQuery('');
+      setMessage({
+        type: "success",
+        text: "✅ Biyografi güncellendi!",
+      });
+    } catch (error: any) {
+      console.error('Error updating bio:', error);
+      setMessage({
+        type: "error",
+        text: `❌ Biyografi güncellenemedi: ${error.response?.data?.detail || error.message}`,
+      });
+    }
+  };
+
   const handleLoginSuccess = (username: string) => {
     setIsAuthenticated(true);
     setCurrentUser(username);
@@ -608,6 +667,14 @@ function App() {
     setSearchError(null);
     setActivePage('home');
     localStorage.setItem('hayai-auth', JSON.stringify({ username, timestamp: Date.now() }));
+
+    // Fetch full profile immediately after login
+    const storedUserId = localStorage.getItem("userId");
+    if (storedUserId) {
+      api.get(`${API_URL}/users/${storedUserId}`)
+        .then(res => setCurrentUserProfile(res.data))
+        .catch(err => console.error("Error fetching current user profile:", err));
+    }
   };
 
   const handleLogout = () => {
@@ -620,6 +687,7 @@ function App() {
     setActivePage('home');
     localStorage.removeItem('hayai-auth');
     localStorage.removeItem('userId');
+    setCurrentUserProfile(null);
   };
 
   const handleFileSelect = (file: File) => {
@@ -794,7 +862,7 @@ function App() {
 
       // Get title text from preset
       const selectedTitle = predefinedTitles.find(t => t.id === titlePresetId)?.text || "Benim Eserim 🖼️";
-      
+
       // Add to gallery
       const newGalleryItem: GalleryItem = {
         id: Date.now().toString(),
@@ -1005,7 +1073,7 @@ function App() {
         postId: commentingItem.originalFilename,
         presetId: presetId
       });
-      
+
       const response = await api.post<Comment>(`${API_URL}/api/posts/${commentingItem.originalFilename}/comment`, {
         presetId: presetId
       });
@@ -1618,9 +1686,16 @@ function App() {
                         </div>
                       </div>
                       <div className="profile-bio">
-                        <p>{viewingProfile ? viewingProfile.bio : userBio}</p>
+                        <p>{viewingProfile ? viewingProfile.bio : (currentUserProfile?.bio || "Merhaba! Ben HayAI kullanıcısıyım.")}</p>
                         {!viewingProfile && (
-                          <button className="edit-bio-button" title="Biyografi düzenle (yakında)">
+                          <button
+                            className="edit-bio-button"
+                            title="Biyografi düzenle"
+                            onClick={() => {
+                              setSelectedBioId(null);
+                              setBioModalOpen(true);
+                            }}
+                          >
                             ✏️
                           </button>
                         )}
@@ -1649,6 +1724,20 @@ function App() {
                           <h4>İlgi Alanları:</h4>
                           <div className="profile-tags">
                             {viewingProfile.interests.map((interest) => (
+                              <span key={interest} className="profile-tag">
+                                #{interest}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Show interests for current user too */}
+                      {!viewingProfile && currentUserProfile && currentUserProfile.interests && currentUserProfile.interests.length > 0 && (
+                        <div className="profile-interests">
+                          <h4>İlgi Alanları:</h4>
+                          <div className="profile-tags">
+                            {currentUserProfile.interests.map((interest) => (
                               <span key={interest} className="profile-tag">
                                 #{interest}
                               </span>
@@ -1871,8 +1960,8 @@ function App() {
                         >
                           👤 Profili Görüntüle
                         </button>
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           className="add-friend-button"
                           onClick={async () => {
                             if (!selectedUser) return;
@@ -1884,7 +1973,7 @@ function App() {
                               });
                               return;
                             }
-                            
+
                             try {
                               if (selectedUserIsFollowing) {
                                 await api.delete(`${API_URL}/users/${selectedUser.id}/follow`, {
@@ -2037,6 +2126,39 @@ function App() {
                     ))
                   )
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bio Selection Modal */}
+        {bioModalOpen && (
+          <div className="modal-overlay" onClick={() => setBioModalOpen(false)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <button className="modal-close" onClick={() => setBioModalOpen(false)}>
+                ✕
+              </button>
+              <h3>Biyografi Seçin</h3>
+              <div className="avatar-grid" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {predefinedBios.map((bio) => (
+                  <button
+                    key={bio.id}
+                    className={`mode-option ${selectedBioId === bio.id ? 'selected' : ''}`}
+                    onClick={() => setSelectedBioId(bio.id)}
+                    style={{ width: '100%', textAlign: 'left', padding: '10px' }}
+                  >
+                    {bio.text}
+                  </button>
+                ))}
+              </div>
+              <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  className="upload-button"
+                  onClick={handleUpdateBio}
+                  disabled={!selectedBioId}
+                >
+                  Güncelle
+                </button>
               </div>
             </div>
           </div>

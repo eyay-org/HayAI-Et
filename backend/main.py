@@ -1024,6 +1024,7 @@ async def transform_image_api(
             "status": final_status,
         }
 
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transformation failed: {str(e)}")
 
@@ -1181,6 +1182,34 @@ async def get_predefined_comments():
     # Convert dict to list of objects for frontend
     comments_list = [{"id": k, "text": v} for k, v in PREDEFINED_COMMENTS.items()]
     return {"comments": comments_list}
+
+
+
+
+
+@app.put("/users/{user_id}/bio")
+async def update_user_bio(
+    user_id: int, 
+    bio_preset_id: int = Query(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Update user bio from preset"""
+    users = get_users_collection()
+
+    if current_user["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this profile")
+
+    if bio_preset_id not in PREDEFINED_BIOS:
+        raise HTTPException(status_code=400, detail="Invalid bio preset ID")
+
+    new_bio = PREDEFINED_BIOS[bio_preset_id]
+    
+    users.update_one(
+        {"user_id": user_id}, 
+        {"$set": {"bio": new_bio, "bio_preset_id": bio_preset_id}}
+    )
+
+    return {"message": "Bio updated successfully", "bio": new_bio}
 
 
 @app.get("/api/presets/bios")
