@@ -642,6 +642,9 @@ function App() {
       }
 
       setBioModalOpen(false);
+      // Clear search results to force re-fetch if user goes back to search
+      setSearchResults([]);
+      setSearchQuery('');
       setMessage({
         type: "success",
         text: "✅ Biyografi güncellendi!",
@@ -1688,7 +1691,10 @@ function App() {
                           <button
                             className="edit-bio-button"
                             title="Biyografi düzenle"
-                            onClick={() => setBioModalOpen(true)}
+                            onClick={() => {
+                              setSelectedBioId(null);
+                              setBioModalOpen(true);
+                            }}
                           >
                             ✏️
                           </button>

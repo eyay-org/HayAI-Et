@@ -1206,7 +1206,7 @@ async def update_user_bio(
     
     users.update_one(
         {"user_id": user_id}, 
-        {"$set": {"bio": new_bio}}
+        {"$set": {"bio": new_bio, "bio_preset_id": bio_preset_id}}
     )
 
     return {"message": "Bio updated successfully", "bio": new_bio}
